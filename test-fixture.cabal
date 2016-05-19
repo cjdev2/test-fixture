@@ -7,17 +7,17 @@ synopsis:
 description:
   Please see README.md
 homepage:
-  http://github.com/githubuser/test-fixture#readme
+  http://github.com/cjdev/test-fixture#readme
 license:
   BSD3
 license-file:
   LICENSE
 author:
-  Author name here
+  Joe Vargas
 maintainer:
-  example@example.com
+  jvargas@cj.com
 copyright:
-  2016 Author Here
+  2016 CJ Affiliate by Conversant
 category:
   Test
 build-type:
@@ -38,5 +38,7 @@ library
     Haskell2010
 
 source-repository head
-  type:     git
-  location: https://github.com/githubuser/test-fixture
+  type:
+    git
+  location:
+    https://github.com/cjdev/test-fixture
