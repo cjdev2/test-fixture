@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 {-|
@@ -116,7 +117,7 @@ mkFixtureRecord fixtureName classNames = do
   let fixtureFields = join $ zipWith (methodsToFields mVar) types methods
   let fixtureCs = [RecC fixtureName fixtureFields]
 
-  let fixtureDec = DataD [] fixtureName [PlainTV mVar] fixtureCs []
+  let fixtureDec = mkDataD [] fixtureName [PlainTV mVar] fixtureCs
   return (fixtureDec, fixtureFields)
 
 mkDefaultInstance :: Name -> [VarStrictType] -> Q Dec
@@ -130,7 +131,7 @@ mkDefaultInstance fixtureName fixtureFields = do
   let defImpl = RecConE fixtureName fixtureClauses
   let defDecl = FunD 'def [Clause [] (NormalB defImpl) []]
 
-  return $ InstanceD [] (AppT (ConT ''Default) appliedFixtureT) [defDecl]
+  return $ mkInstanceD [] (AppT (ConT ''Default) appliedFixtureT) [defDecl]
 
 mkInstance :: Info -> Name -> Q Dec
 mkInstance (ClassI (ClassD _ className _ _ methods) _) fixtureName = do
@@ -144,7 +145,7 @@ mkInstance (ClassI (ClassD _ className _ _ methods) _) fixtureName = do
 
   funDecls <- traverse mkDictInstanceFunc methods
 
-  return $ InstanceD [monoidConstraint] instanceHead funDecls
+  return $ mkInstanceD [monoidConstraint] instanceHead funDecls
 mkInstance other _ = fail $ "mkInstance: expected a class name, given " ++ show other
 
 {-|
@@ -191,7 +192,7 @@ methodsToFields name typ = map (methodToField name typ)
        is the typeclass whose constraint must be removed.
 -}
 methodToField :: Name -> Type -> Dec -> VarStrictType
-methodToField mVar classT (SigD name typ) = (fieldName, NotStrict, newT)
+methodToField mVar classT (SigD name typ) = (fieldName, noStrictness, newT)
   where fieldName = methodNameToFieldName name
         newT = replaceClassConstraint classT mVar typ
 methodToField _ _ _ = error "internal error; report a bug with the test-fixture package"
@@ -332,3 +333,31 @@ functionTypeArity _ = 0
 -}
 applyE :: Exp -> [Exp] -> Exp
 applyE = foldl' AppE
+
+{------------------------------------------------------------------------------|
+| The following functions abstract over differences in template-haskell        |
+| between GHC versions. This allows the same code to work without writing CPP  |
+| everywhere and ending up with a small mess.                                  |
+|------------------------------------------------------------------------------}
+
+mkInstanceD :: Cxt -> Type -> [Dec] -> Dec
+#if MIN_VERSION_template_haskell(2,11,0)
+mkInstanceD = InstanceD Nothing
+#else
+mkInstanceD = InstanceD
+#endif
+
+mkDataD :: Cxt -> Name -> [TyVarBndr] -> [Con] -> Dec
+#if MIN_VERSION_template_haskell(2,11,0)
+mkDataD a b c d = DataD a b c Nothing d []
+#else
+mkDataD a b c d = DataD a b c d []
+#endif
+
+#if MIN_VERSION_template_haskell(2,11,0)
+noStrictness :: Bang
+noStrictness = Bang NoSourceUnpackedness NoSourceStrictness
+#else
+noStrictness :: Strict
+noStrictness = NotStrict
+#endif
