@@ -3,7 +3,7 @@ name:
 version:
   0.1.0.0
 synopsis:
- Test monadic typeclasses deterministically using hooks.
+  Test monadic side-effects
 description:
   Please see README.md
 homepage:
