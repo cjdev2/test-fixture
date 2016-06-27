@@ -292,43 +292,92 @@ execTestFixture stack env st = runIdentity (execTestFixtureT stack env st)
 runTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> (a, s, w)
 runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
 
+{-|
+  A helper function for implementing typeclass instances over 'TestFixture' that
+  pull a value out of a monadic dictionary. For example, given the following
+  instance:
+
+  > instance Monoid w => MonadSomething (TestFixture Fixture w s) where
+  >   getSomething = do
+  >     something <- asks _getSomething
+  >     lift something
+
+  Using 'arg0', it can be rewritten like this:
+
+  > instance Monoid w => MonadSomething (TestFixture Fixture w s) where
+  >   getSomething = arg0 _getSomething
+
+  For functions of various arities instead of plain values, use 'arg1' through
+  'arg7', instead.
+-}
 arg0 :: (Monoid w) => (r (WS w s) -> WS w s a) -> TestFixture r w s a
 arg0 rec = asks rec >>= lift
 
+{-|
+  Like 'arg0', but for lifting record accessors containing functions of arity
+  one. For example, given the following instance:
+
+  > instance Monoid w => MonadSomething (TestFixture Fixture w s) where
+  >   doSomething x = do
+  >     fn <- asks _doSomething
+  >     lift $ fn x
+
+  Using 'arg1', it can be rewritten like this:
+
+  > instance Monoid w => MonadSomething (TestFixture Fixture w s) where
+  >   doSomething = arg1 _doSomething
+
+  For functions of higher arities, use 'arg2' through 'arg7'.
+-}
 arg1 :: (Monoid w) => (r (WS w s) -> a -> WS w s b) -> a -> TestFixture r w s b
 arg1 rec a = do
   fn <- asks rec
   lift $ fn a
 
+-- | Like 'arg1', but for functions of arity 2.
 arg2 :: (Monoid w) => (r (WS w s) -> a -> b -> WS w s c) -> a -> b -> TestFixture r w s c
 arg2 rec a b = do
   fn <- asks rec
   lift $ fn a b
 
+-- | Like 'arg1', but for functions of arity 3.
 arg3 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> WS w s d) -> a -> b -> c -> TestFixture r w s d
 arg3 rec a b c = do
   fn <- asks rec
   lift $ fn a b c
 
+-- | Like 'arg1', but for functions of arity 4.
 arg4 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> d -> WS w s e) -> a -> b -> c -> d -> TestFixture r w s e
 arg4 rec a b c d = do
   fn <- asks rec
   lift $ fn a b c d
 
+-- | Like 'arg1', but for functions of arity 5.
 arg5 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> d -> e -> WS w s f) -> a -> b -> c -> d -> e -> TestFixture r w s f
 arg5 rec a b c d e = do
   fn <- asks rec
   lift $ fn a b c d e
 
+-- | Like 'arg1', but for functions of arity 6.
 arg6 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> d -> e -> f -> WS w s g) -> a -> b -> c -> d -> e -> f -> TestFixture r w s g
 arg6 rec a b c d e f = do
   fn <- asks rec
   lift $ fn a b c d e f
 
+-- | Like 'arg1', but for functions of arity 7.
 arg7 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> d -> e -> f -> g -> WS w s h) -> a -> b -> c -> d -> e -> f -> g -> TestFixture r w s h
 arg7 rec a b c d e f g = do
   fn <- asks rec
   lift $ fn a b c d e f g
 
+{-|
+  An extremely simple helper function for creating “base” fixture dictionaries
+  with implementations that will simply throw as soon as they are called using
+  a helpful error message. The provided argument should be the name of a method
+  being implemented.
+
+  >>> unimplemented "_getSomething"
+  *** Exception: unimplemented fixture method `_getSomething`
+-}
 unimplemented :: String -> a
 unimplemented name = error ("unimplemented fixture method `" ++ name ++ "`")
