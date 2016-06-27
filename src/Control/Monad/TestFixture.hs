@@ -227,18 +227,23 @@ type TestFixtureT r w s m = ReaderT (r (WST w s m)) (WST w s m)
 -- | The 'WS' type alias equivalent for the 'TestFixtureT' monad transformer.
 type WST w s m = RWST () w s m
 
+-- | The transformer equivalent of 'unTestFixture'.
 unTestFixtureT :: Monad m => TestFixtureT r () s m a -> r (WST () s m)  -> s -> m a
 unTestFixtureT stack env st = fmap fst (evalTestFixtureT stack env st)
 
+-- | The transformer equivalent of 'logTestFixture'.
 logTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m)  -> s -> m w
 logTestFixtureT stack env st = fmap snd (evalTestFixtureT stack env st)
 
+-- | The transformer equivalent of 'evalTestFixture'.
 evalTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m)  -> s -> m (a, w)
 evalTestFixtureT stack env st = evalRWST (runReaderT stack env) () st
 
+-- | The transformer equivalent of 'execTestFixture'.
 execTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m) -> s -> m (s, w)
 execTestFixtureT stack env st = execRWST (runReaderT stack env) () st
 
+-- | The transformer equivalent of 'runTestFixture'.
 runTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m)  -> s -> m (a, s, w)
 runTestFixtureT stack env st = runRWST (runReaderT stack env) () st
 
