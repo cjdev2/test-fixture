@@ -212,10 +212,20 @@ import Control.Monad.RWS.Class
 import Data.Functor.Identity
 import Control.Monad.Reader
 
-type WST w s m = RWST () w s m
-type WS w s = WST w s Identity
-type TestFixtureT r w s m = ReaderT (r (WST w s m)) (WST w s m)
+-- | The 'TestFixture' monad. A wrapper around the 'RWS' monad, where the reader
+--   is a reified typeclass dictionary. For more information, see the module
+--   documentation for "Control.Monad.TestFixture".
 type TestFixture r w s = TestFixtureT r w s Identity
+-- | A type alias for 'RWS' where the reader component is always @()@. Used
+--   because the actual reader component is already occupied by the dictionary
+--   being threaded by the 'TestFixture' monad.
+type WS w s = WST w s Identity
+
+-- | 'TestFixture' as a monad transformer instead of as a monad. A wrapper
+--   around the 'RWST' monad transformer.
+type TestFixtureT r w s m = ReaderT (r (WST w s m)) (WST w s m)
+-- | The 'WS' type alias equivalent for the 'TestFixtureT' monad transformer.
+type WST w s m = RWST () w s m
 
 unTestFixtureT :: Monad m => TestFixtureT r () s m a -> r (WST () s m)  -> s -> m a
 unTestFixtureT stack env st = fmap fst (evalTestFixtureT stack env st)
@@ -232,19 +242,49 @@ execTestFixtureT stack env st = execRWST (runReaderT stack env) () st
 runTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m)  -> s -> m (a, s, w)
 runTestFixtureT stack env st = runRWST (runReaderT stack env) () st
 
-unTestFixture :: TestFixture r () s a -> r (WS () s)  -> s -> a
+{-|
+  The simplest way to run a test given a fixture, 'unTestFixture' simply runs a
+  monadic computation with a particular fixture and a starting state and returns
+  the computations result. Useful for testing impure functions that return
+  useful values.
+-}
+unTestFixture
+  :: TestFixture r () s a -- ^ the monadic computation to run
+  -> r (WS () s)          -- ^ the fixture dictionary to use
+  -> s                    -- ^ the initial monad state
+  -> a                    -- ^ the computation’s result
 unTestFixture stack env st = runIdentity (unTestFixtureT stack env st)
 
-logTestFixture :: TestFixture r w s a -> r (WS w s)  -> s -> w
+{-|
+  Like 'unTestFixture', but instead of returning the result of the computation,
+  'logTestFixture' returns the value written from the writer monad. Useful for
+  testing impure functions called exclusively for side-effects that do not
+  depend on complex prior state.
+-}
+logTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> w
 logTestFixture stack env st = runIdentity (logTestFixtureT stack env st)
 
-evalTestFixture :: TestFixture r w s a -> r (WS w s)  -> s -> (a, w)
+{-|
+  Combines 'unTestFixture' and 'logTestFixture' to return /both/ the
+  computation’s result and the written value as a tuple.
+-}
+evalTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> (a, w)
 evalTestFixture stack env st = runIdentity (evalTestFixtureT stack env st)
 
-execTestFixture :: TestFixture r w s a -> r (WS w s)  -> s -> (s, w)
+{-|
+  Like 'logTestFixture' but returns the final monadic state as well as the value
+  written from the writer monad. Useful for testing stateful side-effectful
+  computations.
+-}
+execTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> (s, w)
 execTestFixture stack env st = runIdentity (execTestFixtureT stack env st)
 
-runTestFixture :: TestFixture r w s a -> r (WS w s)  -> s -> (a, s, w)
+{-|
+  Runs a test fixture and returns all three pieces of resulting information:
+  the computation’s result, the final monadic state, and the value written from
+  the writer.
+-}
+runTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> (a, s, w)
 runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
 
 arg0 :: (Monoid w) => (r (WS w s) -> WS w s a) -> TestFixture r w s a
