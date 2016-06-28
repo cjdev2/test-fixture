@@ -194,6 +194,8 @@ module Control.Monad.TestFixture (
   , execTestFixtureT
   , runTestFixtureT
   -- * Helper functions
+  , module Control.Monad.Writer.Class
+  , module Control.Monad.State.Class
   , arg0
   , arg1
   , arg2
@@ -204,6 +206,9 @@ module Control.Monad.TestFixture (
   , arg7
   , unimplemented
   ) where
+
+import qualified Control.Monad.Writer.Class
+import qualified Control.Monad.State.Class
 
 import Control.Monad.RWS
 import Data.Functor.Identity
