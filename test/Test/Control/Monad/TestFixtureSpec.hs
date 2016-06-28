@@ -48,5 +48,5 @@ spec =
             , _insertRecord = \_ -> return $ Right (Id 42)
             , _sendRequest = \_ -> return $ Right (HTTPResponse 200)
             }
-      let result = unTestFixture (useDBAndHTTP User) fixture ()
+      let result = unTestFixture (useDBAndHTTP User) fixture
       result `shouldBe` Right User
