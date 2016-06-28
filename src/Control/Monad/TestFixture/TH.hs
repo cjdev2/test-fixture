@@ -279,7 +279,7 @@ mkDictInstanceFunc (SigD name typ) = do
 
   implE <- [e|do
     fn <- Reader.asks $(return askFunc)
-    Reader.lift $ $(return $ applyE (VarE 'fn) vars)|]
+    $(return $ applyE (VarE 'fn) vars)|]
 
   let funClause = Clause pats (NormalB implE) []
   return $ FunD name [funClause]

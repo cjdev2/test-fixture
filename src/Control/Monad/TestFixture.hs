@@ -1,3 +1,5 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 {-|
   = Introduction and motivation
 
@@ -180,7 +182,6 @@
 module Control.Monad.TestFixture (
   -- * The TestFixture monad
     TestFixture
-  , WS
   , unTestFixture
   , logTestFixture
   , evalTestFixture
@@ -188,14 +189,12 @@ module Control.Monad.TestFixture (
   , runTestFixture
   -- * The TestFixtureT monad transformer
   , TestFixtureT
-  , WST
   , unTestFixtureT
   , logTestFixtureT
   , evalTestFixtureT
   , execTestFixtureT
   , runTestFixtureT
   -- * Helper functions
-  , module Control.Monad.RWS.Class
   , arg0
   , arg1
   , arg2
@@ -208,44 +207,47 @@ module Control.Monad.TestFixture (
   ) where
 
 import Control.Monad.RWS
-import Control.Monad.RWS.Class
 import Data.Functor.Identity
-import Control.Monad.Reader
 
 -- | The 'TestFixture' monad. A wrapper around the 'RWS' monad, where the reader
 --   is a reified typeclass dictionary. For more information, see the module
 --   documentation for "Control.Monad.TestFixture".
 type TestFixture r w s = TestFixtureT r w s Identity
--- | A type alias for 'RWS' where the reader component is always @()@. Used
---   because the actual reader component is already occupied by the dictionary
---   being threaded by the 'TestFixture' monad.
-type WS w s = WST w s Identity
 
 -- | 'TestFixture' as a monad transformer instead of as a monad. A wrapper
 --   around the 'RWST' monad transformer.
-type TestFixtureT r w s m = ReaderT (r (WST w s m)) (WST w s m)
--- | The 'WS' type alias equivalent for the 'TestFixtureT' monad transformer.
-type WST w s m = RWST () w s m
+newtype TestFixtureT fixture w s m a = TestFixtureT { getRWST :: RWST (fixture (TestFixtureT fixture w s m)) w s m a }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadReader (fixture (TestFixtureT fixture w s m))
+    , MonadWriter w
+    , MonadState s
+    )
+
+instance Monoid w => MonadTrans (TestFixtureT fixture w s) where
+  lift = TestFixtureT . lift
 
 -- | The transformer equivalent of 'unTestFixture'.
-unTestFixtureT :: Monad m => TestFixtureT r () s m a -> r (WST () s m)  -> s -> m a
+unTestFixtureT :: Monad m => TestFixtureT r () s m a -> r (TestFixtureT r () s m) -> s -> m a
 unTestFixtureT stack env st = fmap fst (evalTestFixtureT stack env st)
 
 -- | The transformer equivalent of 'logTestFixture'.
-logTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m)  -> s -> m w
+logTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (TestFixtureT r w s m) -> s -> m w
 logTestFixtureT stack env st = fmap snd (evalTestFixtureT stack env st)
 
 -- | The transformer equivalent of 'evalTestFixture'.
-evalTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m)  -> s -> m (a, w)
-evalTestFixtureT stack env st = evalRWST (runReaderT stack env) () st
+evalTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (TestFixtureT r w s m) -> s -> m (a, w)
+evalTestFixtureT stack env st = evalRWST (getRWST stack) env st
 
 -- | The transformer equivalent of 'execTestFixture'.
-execTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m) -> s -> m (s, w)
-execTestFixtureT stack env st = execRWST (runReaderT stack env) () st
+execTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (TestFixtureT r w s m) -> s -> m (s, w)
+execTestFixtureT stack env st = execRWST (getRWST stack) env st
 
 -- | The transformer equivalent of 'runTestFixture'.
-runTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (WST w s m)  -> s -> m (a, s, w)
-runTestFixtureT stack env st = runRWST (runReaderT stack env) () st
+runTestFixtureT :: Monad m => TestFixtureT r w s m a -> r (TestFixtureT r w s m) -> s -> m (a, s, w)
+runTestFixtureT stack env st = runRWST (getRWST stack) env st
 
 {-|
   The simplest way to run a test given a fixture, 'unTestFixture' simply runs a
@@ -254,10 +256,10 @@ runTestFixtureT stack env st = runRWST (runReaderT stack env) () st
   useful values.
 -}
 unTestFixture
-  :: TestFixture r () s a -- ^ the monadic computation to run
-  -> r (WS () s)          -- ^ the fixture dictionary to use
-  -> s                    -- ^ the initial monad state
-  -> a                    -- ^ the computation’s result
+  :: TestFixture r () s a   -- ^ the monadic computation to run
+  -> r (TestFixture r () s) -- ^ the fixture dictionary to use
+  -> s                      -- ^ the initial monad state
+  -> a                      -- ^ the computation’s result
 unTestFixture stack env st = runIdentity (unTestFixtureT stack env st)
 
 {-|
@@ -266,14 +268,14 @@ unTestFixture stack env st = runIdentity (unTestFixtureT stack env st)
   testing impure functions called exclusively for side-effects that do not
   depend on complex prior state.
 -}
-logTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> w
+logTestFixture :: TestFixture r w s a -> r (TestFixture r w s) -> s -> w
 logTestFixture stack env st = runIdentity (logTestFixtureT stack env st)
 
 {-|
   Combines 'unTestFixture' and 'logTestFixture' to return /both/ the
   computation’s result and the written value as a tuple.
 -}
-evalTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> (a, w)
+evalTestFixture :: TestFixture r w s a -> r (TestFixture r w s) -> s -> (a, w)
 evalTestFixture stack env st = runIdentity (evalTestFixtureT stack env st)
 
 {-|
@@ -281,7 +283,7 @@ evalTestFixture stack env st = runIdentity (evalTestFixtureT stack env st)
   written from the writer monad. Useful for testing stateful side-effectful
   computations.
 -}
-execTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> (s, w)
+execTestFixture :: TestFixture r w s a -> r (TestFixture r w s) -> s -> (s, w)
 execTestFixture stack env st = runIdentity (execTestFixtureT stack env st)
 
 {-|
@@ -289,7 +291,7 @@ execTestFixture stack env st = runIdentity (execTestFixtureT stack env st)
   the computation’s result, the final monadic state, and the value written from
   the writer.
 -}
-runTestFixture :: TestFixture r w s a -> r (WS w s) -> s -> (a, s, w)
+runTestFixture :: TestFixture r w s a -> r (TestFixture r w s) -> s -> (a, s, w)
 runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
 
 {-|
@@ -310,8 +312,8 @@ runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
   For functions of various arities instead of plain values, use 'arg1' through
   'arg7', instead.
 -}
-arg0 :: (Monoid w) => (r (WS w s) -> WS w s a) -> TestFixture r w s a
-arg0 rec = asks rec >>= lift
+arg0 :: (Monoid w) => (r (TestFixture r w s) -> TestFixture r w s a) -> TestFixture r w s a
+arg0 rec = join $ asks rec
 
 {-|
   Like 'arg0', but for lifting record accessors containing functions of arity
@@ -329,46 +331,46 @@ arg0 rec = asks rec >>= lift
 
   For functions of higher arities, use 'arg2' through 'arg7'.
 -}
-arg1 :: (Monoid w) => (r (WS w s) -> a -> WS w s b) -> a -> TestFixture r w s b
+arg1 :: (Monoid w) => (r (TestFixture r w s) -> a -> TestFixture r w s b) -> a -> TestFixture r w s b
 arg1 rec a = do
   fn <- asks rec
-  lift $ fn a
+  fn a
 
 -- | Like 'arg1', but for functions of arity 2.
-arg2 :: (Monoid w) => (r (WS w s) -> a -> b -> WS w s c) -> a -> b -> TestFixture r w s c
+arg2 :: (Monoid w) => (r (TestFixture r w s) -> a -> b -> TestFixture r w s c) -> a -> b -> TestFixture r w s c
 arg2 rec a b = do
   fn <- asks rec
-  lift $ fn a b
+  fn a b
 
 -- | Like 'arg1', but for functions of arity 3.
-arg3 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> WS w s d) -> a -> b -> c -> TestFixture r w s d
+arg3 :: (Monoid w) => (r (TestFixture r w s) -> a -> b -> c -> TestFixture r w s d) -> a -> b -> c -> TestFixture r w s d
 arg3 rec a b c = do
   fn <- asks rec
-  lift $ fn a b c
+  fn a b c
 
 -- | Like 'arg1', but for functions of arity 4.
-arg4 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> d -> WS w s e) -> a -> b -> c -> d -> TestFixture r w s e
+arg4 :: (Monoid w) => (r (TestFixture r w s) -> a -> b -> c -> d -> TestFixture r w s e) -> a -> b -> c -> d -> TestFixture r w s e
 arg4 rec a b c d = do
   fn <- asks rec
-  lift $ fn a b c d
+  fn a b c d
 
 -- | Like 'arg1', but for functions of arity 5.
-arg5 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> d -> e -> WS w s f) -> a -> b -> c -> d -> e -> TestFixture r w s f
+arg5 :: (Monoid w) => (r (TestFixture r w s) -> a -> b -> c -> d -> e -> TestFixture r w s f) -> a -> b -> c -> d -> e -> TestFixture r w s f
 arg5 rec a b c d e = do
   fn <- asks rec
-  lift $ fn a b c d e
+  fn a b c d e
 
 -- | Like 'arg1', but for functions of arity 6.
-arg6 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> d -> e -> f -> WS w s g) -> a -> b -> c -> d -> e -> f -> TestFixture r w s g
+arg6 :: (Monoid w) => (r (TestFixture r w s) -> a -> b -> c -> d -> e -> f -> TestFixture r w s g) -> a -> b -> c -> d -> e -> f -> TestFixture r w s g
 arg6 rec a b c d e f = do
   fn <- asks rec
-  lift $ fn a b c d e f
+  fn a b c d e f
 
 -- | Like 'arg1', but for functions of arity 7.
-arg7 :: (Monoid w) => (r (WS w s) -> a -> b -> c -> d -> e -> f -> g -> WS w s h) -> a -> b -> c -> d -> e -> f -> g -> TestFixture r w s h
+arg7 :: (Monoid w) => (r (TestFixture r w s) -> a -> b -> c -> d -> e -> f -> g -> TestFixture r w s h) -> a -> b -> c -> d -> e -> f -> g -> TestFixture r w s h
 arg7 rec a b c d e f g = do
   fn <- asks rec
-  lift $ fn a b c d e f g
+  fn a b c d e f g
 
 {-|
   An extremely simple helper function for creating “base” fixture dictionaries
