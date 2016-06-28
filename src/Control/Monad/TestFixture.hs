@@ -142,12 +142,11 @@
   might need to return different values each time! This requires some degree of
   state tracking that a reader monad simply cannot provide.
 
-  To solve this, the provided 'TestFixture' monad is a wrapper aroud the 'RWS'
-  monad, which combines a /reader/, /writer/, and /state/ monad into a single
-  system. This allows “logging” results from a fixture by using 'tell' within
-  the fixture definition and 'logTestFixture', and it also permits having
-  fixture invocations depend on previous uses of the fixture by using 'get' and
-  'put' from 'MonadState'.
+  To solve this, the provided 'TestFixture' monad combines a /reader/, /writer/,
+  and /state/ monad into a single system. This allows “logging” results from a
+  fixture by using 'tell' within the fixture definition and 'logTestFixture',
+  and it also permits having fixture invocations depend on previous uses of the
+  fixture by using 'get' and 'put' from 'MonadState'.
 
   Continuing from the above example but using 'TestFixture' instead, we eschew
   the simpler @FixtureM@ type and create instances over 'TestFixture' instead:
@@ -209,13 +208,13 @@ module Control.Monad.TestFixture (
 import Control.Monad.RWS
 import Data.Functor.Identity
 
--- | The 'TestFixture' monad. A wrapper around the 'RWS' monad, where the reader
---   is a reified typeclass dictionary. For more information, see the module
---   documentation for "Control.Monad.TestFixture".
+-- | The 'TestFixture' monad. A combination of a /reader/, /writer/, and /state/
+--   monad, where the reader portion contains a reified typeclass dictionary
+--   used as a fixture. For more information, see the module documentation for
+--   "Control.Monad.TestFixture".
 type TestFixture fixture log state = TestFixtureT fixture log state Identity
 
--- | 'TestFixture' as a monad transformer instead of as a monad. A wrapper
---   around the 'RWST' monad transformer.
+-- | 'TestFixture' as a monad transformer instead of as a monad.
 newtype TestFixtureT fixture log state m a = TestFixtureT { getRWST :: RWST (fixture (TestFixtureT fixture log state m)) log state m a }
   deriving
     ( Functor
