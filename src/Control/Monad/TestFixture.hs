@@ -162,15 +162,15 @@
   > spec = describe "lookupUserIsAdmin" $ do
   >   it "returns True when the UserId corresponds to an admin user" $ do
   >     let fixture = Fixture { _lookupUser = return $ Just User { isAdmin = True } }
-  >     unTestFixture (lookupUserIsAdmin (UserId 42)) fixture () `shouldBe` True
+  >     unTestFixture (lookupUserIsAdmin (UserId 42)) fixture `shouldBe` True
   >
   >   it "returns False when the UserId corresponds to a non-admin user" $ do
   >     let fixture = Fixture { _lookupUser = return $ Just User { isAdmin = False } }
-  >     unTestFixture (lookupUserIsAdmin (UserId 42)) fixture () `shouldBe` False
+  >     unTestFixture (lookupUserIsAdmin (UserId 42)) fixture `shouldBe` False
   >
   >   it "returns False when the UserId does not have a corresponding User" $ do
   >     let fixture = Fixture { _lookupUser = return Nothing }
-  >     unTestFixture (lookupUserIsAdmin (UserId 42)) fixture () `shouldBe` False
+  >     unTestFixture (lookupUserIsAdmin (UserId 42)) fixture `shouldBe` False
 
   As a final note, writing out all of these fixture record definitions and
   instance declarations can be extremely tedious with large numbers of
@@ -229,16 +229,16 @@ instance Monoid log => MonadTrans (TestFixtureT fixture log state) where
   lift = TestFixtureT . lift
 
 -- | The transformer equivalent of 'unTestFixture'.
-unTestFixtureT :: Monad m => TestFixtureT fixture () state m a -> fixture (TestFixtureT fixture () state m) -> state -> m a
-unTestFixtureT stack env st = fmap fst (evalTestFixtureT stack env st)
+unTestFixtureT :: Monad m => TestFixtureT fixture () () m a -> fixture (TestFixtureT fixture () () m) -> m a
+unTestFixtureT stack env = fmap fst (evalTestFixtureT stack env)
 
 -- | The transformer equivalent of 'logTestFixture'.
-logTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> state -> m log
-logTestFixtureT stack env st = fmap snd (evalTestFixtureT stack env st)
+logTestFixtureT :: Monad m => TestFixtureT fixture log () m a -> fixture (TestFixtureT fixture log () m) -> m log
+logTestFixtureT stack env = fmap snd (evalTestFixtureT stack env)
 
 -- | The transformer equivalent of 'evalTestFixture'.
-evalTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> state -> m (a, log)
-evalTestFixtureT stack env st = evalRWST (getRWST stack) env st
+evalTestFixtureT :: Monad m => TestFixtureT fixture log () m a -> fixture (TestFixtureT fixture log () m) -> m (a, log)
+evalTestFixtureT stack env = evalRWST (getRWST stack) env ()
 
 -- | The transformer equivalent of 'execTestFixture'.
 execTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> state -> m (state, log)
@@ -250,16 +250,14 @@ runTestFixtureT stack env st = runRWST (getRWST stack) env st
 
 {-|
   The simplest way to run a test given a fixture, 'unTestFixture' simply runs a
-  monadic computation with a particular fixture and a starting state and returns
-  the computations result. Useful for testing impure functions that return
-  useful values.
+  monadic computation with a particular fixture and returns the computation’s
+  result. Useful for testing impure functions that return useful values.
 -}
 unTestFixture
-  :: TestFixture fixture () state a         -- ^ the monadic computation to run
-  -> fixture (TestFixture fixture () state) -- ^ the fixture dictionary to use
-  -> state                                  -- ^ the initial monad state
-  -> a                                      -- ^ the computation’state result
-unTestFixture stack env st = runIdentity (unTestFixtureT stack env st)
+  :: TestFixture fixture () () a         -- ^ the monadic computation to run
+  -> fixture (TestFixture fixture () ()) -- ^ the fixture dictionary to use
+  -> a                                   -- ^ the computation’s result
+unTestFixture stack env = runIdentity (unTestFixtureT stack env)
 
 {-|
   Like 'unTestFixture', but instead of returning the result of the computation,
@@ -267,28 +265,28 @@ unTestFixture stack env st = runIdentity (unTestFixtureT stack env st)
   testing impure functions called exclusively for side-effects that do not
   depend on complex prior state.
 -}
-logTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> state -> log
-logTestFixture stack env st = runIdentity (logTestFixtureT stack env st)
+logTestFixture :: TestFixture fixture log () a -> fixture (TestFixture fixture log ()) -> log
+logTestFixture stack env = runIdentity (logTestFixtureT stack env)
 
 {-|
   Combines 'unTestFixture' and 'logTestFixture' to return /both/ the
   computation’s result and the written value as a tuple.
 -}
-evalTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> state -> (a, log)
-evalTestFixture stack env st = runIdentity (evalTestFixtureT stack env st)
+evalTestFixture :: TestFixture fixture log () a -> fixture (TestFixture fixture log ()) -> (a, log)
+evalTestFixture stack env = runIdentity (evalTestFixtureT stack env)
 
 {-|
-  Like 'logTestFixture' but returns the final monadic state as well as the value
-  written from the writer monad. Useful for testing stateful side-effectful
-  computations.
+  Like 'logTestFixture' but accepts an initial state and returns the final
+  monadic state tupled with the value written from the writer monad. Useful for
+  testing stateful side-effectful computations.
 -}
 execTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> state -> (state, log)
 execTestFixture stack env st = runIdentity (execTestFixtureT stack env st)
 
 {-|
-  Runs a test fixture and returns all three pieces of resulting information:
-  the computation’s result, the final monadic state, and the value written from
-  the writer.
+  Runs a test fixture given an initial state and returns all three pieces of
+  resulting information: the computation’s result, the final monadic state, and
+  the value written from the writer.
 -}
 runTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> state -> (a, state, log)
 runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
