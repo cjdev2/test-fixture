@@ -1,4 +1,4 @@
-# test-fixture
+# test-fixture [![Build Status](https://travis-ci.org/cjdev/test-fixture.svg?branch=master)](https://travis-ci.org/cjdev/test-fixture)
 
 The [test-fixture][test-fixture-hackage] package is a Haskell library that makes it possible to easily write deterministic unit tests for code that encapsulates effects into monadic typeclasses. For example, given some typeclasses used to encapsulate effects:
 
