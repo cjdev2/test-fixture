@@ -26,7 +26,7 @@ Then use those typeclasses to implement some sort of side-effectful function:
 
 ```haskell
 sendAndFetch :: (MonadDB m, MonadHTTP m, DBRecord a)
-             => HTTPRequest -> m (Either AppError a) ()
+             => HTTPRequest -> m (Either AppError a)
 sendAndFetch = ...
 ```
 
