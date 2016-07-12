@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 #if __GLASGOW_HASKELL__ >= 800
@@ -210,7 +211,10 @@ module Control.Monad.TestFixture (
   , arg6
   , arg7
   , unimplemented
+  , log
   ) where
+
+import Prelude hiding (log)
 
 import qualified Control.Monad.Writer.Class
 import qualified Control.Monad.State.Class
@@ -225,17 +229,17 @@ import Data.Functor.Identity
 type TestFixture fixture log state = TestFixtureT fixture log state Identity
 
 -- | 'TestFixture' as a monad transformer instead of as a monad.
-newtype TestFixtureT fixture log state m a = TestFixtureT { getRWST :: RWST (fixture (TestFixtureT fixture log state m)) log state m a }
+newtype TestFixtureT fixture log state m a = TestFixtureT { getRWST :: RWST (fixture (TestFixtureT fixture log state m)) [log] state m a }
   deriving
     ( Functor
     , Applicative
     , Monad
     , MonadReader (fixture (TestFixtureT fixture log state m))
-    , MonadWriter log
+    , MonadWriter [log]
     , MonadState state
     )
 
-instance Monoid log => MonadTrans (TestFixtureT fixture log state) where
+instance MonadTrans (TestFixtureT fixture log state) where
   lift = TestFixtureT . lift
 
 -- | The transformer equivalent of 'unTestFixture'.
@@ -243,19 +247,19 @@ unTestFixtureT :: Monad m => TestFixtureT fixture () () m a -> fixture (TestFixt
 unTestFixtureT stack env = fmap fst (evalTestFixtureT stack env)
 
 -- | The transformer equivalent of 'logTestFixture'.
-logTestFixtureT :: Monad m => TestFixtureT fixture log () m a -> fixture (TestFixtureT fixture log () m) -> m log
+logTestFixtureT :: Monad m => TestFixtureT fixture log () m a -> fixture (TestFixtureT fixture log () m) -> m [log]
 logTestFixtureT stack env = fmap snd (evalTestFixtureT stack env)
 
 -- | The transformer equivalent of 'evalTestFixture'.
-evalTestFixtureT :: Monad m => TestFixtureT fixture log () m a -> fixture (TestFixtureT fixture log () m) -> m (a, log)
+evalTestFixtureT :: Monad m => TestFixtureT fixture log () m a -> fixture (TestFixtureT fixture log () m) -> m (a, [log])
 evalTestFixtureT stack env = evalRWST (getRWST stack) env ()
 
 -- | The transformer equivalent of 'execTestFixture'.
-execTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> state -> m (state, log)
+execTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> state -> m (state, [log])
 execTestFixtureT stack env st = execRWST (getRWST stack) env st
 
 -- | The transformer equivalent of 'runTestFixture'.
-runTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> state -> m (a, state, log)
+runTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> state -> m (a, state, [log])
 runTestFixtureT stack env st = runRWST (getRWST stack) env st
 
 {-|
@@ -275,14 +279,14 @@ unTestFixture stack env = runIdentity (unTestFixtureT stack env)
   testing impure functions called exclusively for side-effects that do not
   depend on complex prior state.
 -}
-logTestFixture :: TestFixture fixture log () a -> fixture (TestFixture fixture log ()) -> log
+logTestFixture :: TestFixture fixture log () a -> fixture (TestFixture fixture log ()) -> [log]
 logTestFixture stack env = runIdentity (logTestFixtureT stack env)
 
 {-|
   Combines 'unTestFixture' and 'logTestFixture' to return /both/ the
   computation’s result and the written value as a tuple.
 -}
-evalTestFixture :: TestFixture fixture log () a -> fixture (TestFixture fixture log ()) -> (a, log)
+evalTestFixture :: TestFixture fixture log () a -> fixture (TestFixture fixture log ()) -> (a, [log])
 evalTestFixture stack env = runIdentity (evalTestFixtureT stack env)
 
 {-|
@@ -290,7 +294,7 @@ evalTestFixture stack env = runIdentity (evalTestFixtureT stack env)
   monadic state tupled with the value written from the writer monad. Useful for
   testing stateful side-effectful computations.
 -}
-execTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> state -> (state, log)
+execTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> state -> (state, [log])
 execTestFixture stack env st = runIdentity (execTestFixtureT stack env st)
 
 {-|
@@ -298,7 +302,7 @@ execTestFixture stack env st = runIdentity (execTestFixtureT stack env st)
   resulting information: the computation’s result, the final monadic state, and
   the value written from the writer.
 -}
-runTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> state -> (a, state, log)
+runTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> state -> (a, state, [log])
 runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
 
 {-|
@@ -319,7 +323,7 @@ runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
   For functions of various arities instead of plain values, use 'arg1' through
   'arg7', instead.
 -}
-arg0 :: (Monoid log) => (fixture (TestFixture fixture log state) -> TestFixture fixture log state a) -> TestFixture fixture log state a
+arg0 :: (fixture (TestFixture fixture log state) -> TestFixture fixture log state a) -> TestFixture fixture log state a
 arg0 rec = join $ asks rec
 
 {-|
@@ -338,43 +342,43 @@ arg0 rec = join $ asks rec
 
   For functions of higher arities, use 'arg2' through 'arg7'.
 -}
-arg1 :: (Monoid log) => (fixture (TestFixture fixture log state) -> a -> TestFixture fixture log state b) -> a -> TestFixture fixture log state b
+arg1 :: (fixture (TestFixture fixture log state) -> a -> TestFixture fixture log state b) -> a -> TestFixture fixture log state b
 arg1 rec a = do
   fn <- asks rec
   fn a
 
 -- | Like 'arg1', but for functions of arity 2.
-arg2 :: (Monoid log) => (fixture (TestFixture fixture log state) -> a -> b -> TestFixture fixture log state c) -> a -> b -> TestFixture fixture log state c
+arg2 :: (fixture (TestFixture fixture log state) -> a -> b -> TestFixture fixture log state c) -> a -> b -> TestFixture fixture log state c
 arg2 rec a b = do
   fn <- asks rec
   fn a b
 
 -- | Like 'arg1', but for functions of arity 3.
-arg3 :: (Monoid log) => (fixture (TestFixture fixture log state) -> a -> b -> c -> TestFixture fixture log state d) -> a -> b -> c -> TestFixture fixture log state d
+arg3 :: (fixture (TestFixture fixture log state) -> a -> b -> c -> TestFixture fixture log state d) -> a -> b -> c -> TestFixture fixture log state d
 arg3 rec a b c = do
   fn <- asks rec
   fn a b c
 
 -- | Like 'arg1', but for functions of arity 4.
-arg4 :: (Monoid log) => (fixture (TestFixture fixture log state) -> a -> b -> c -> d -> TestFixture fixture log state e) -> a -> b -> c -> d -> TestFixture fixture log state e
+arg4 :: (fixture (TestFixture fixture log state) -> a -> b -> c -> d -> TestFixture fixture log state e) -> a -> b -> c -> d -> TestFixture fixture log state e
 arg4 rec a b c d = do
   fn <- asks rec
   fn a b c d
 
 -- | Like 'arg1', but for functions of arity 5.
-arg5 :: (Monoid log) => (fixture (TestFixture fixture log state) -> a -> b -> c -> d -> e -> TestFixture fixture log state f) -> a -> b -> c -> d -> e -> TestFixture fixture log state f
+arg5 :: (fixture (TestFixture fixture log state) -> a -> b -> c -> d -> e -> TestFixture fixture log state f) -> a -> b -> c -> d -> e -> TestFixture fixture log state f
 arg5 rec a b c d e = do
   fn <- asks rec
   fn a b c d e
 
 -- | Like 'arg1', but for functions of arity 6.
-arg6 :: (Monoid log) => (fixture (TestFixture fixture log state) -> a -> b -> c -> d -> e -> f -> TestFixture fixture log state g) -> a -> b -> c -> d -> e -> f -> TestFixture fixture log state g
+arg6 :: (fixture (TestFixture fixture log state) -> a -> b -> c -> d -> e -> f -> TestFixture fixture log state g) -> a -> b -> c -> d -> e -> f -> TestFixture fixture log state g
 arg6 rec a b c d e f = do
   fn <- asks rec
   fn a b c d e f
 
 -- | Like 'arg1', but for functions of arity 7.
-arg7 :: (Monoid log) => (fixture (TestFixture fixture log state) -> a -> b -> c -> d -> e -> f -> g -> TestFixture fixture log state h) -> a -> b -> c -> d -> e -> f -> g -> TestFixture fixture log state h
+arg7 :: (fixture (TestFixture fixture log state) -> a -> b -> c -> d -> e -> f -> g -> TestFixture fixture log state h) -> a -> b -> c -> d -> e -> f -> g -> TestFixture fixture log state h
 arg7 rec a b c d e f g = do
   fn <- asks rec
   fn a b c d e f g
@@ -390,3 +394,11 @@ arg7 rec a b c d e f g = do
 -}
 unimplemented :: String -> a
 unimplemented name = error ("unimplemented fixture method `" ++ name ++ "`")
+
+{-|
+  Logs a single value using 'MonadWriter' when the writer state is a list.
+  Equivalent to @'tell' . 'pure'@. Useful with 'TestFixture' implementations to
+  record values when using functions like 'logTestFixture'.
+-}
+log :: MonadWriter [log] m => log -> m ()
+log = tell . pure

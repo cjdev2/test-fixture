@@ -56,7 +56,7 @@
   >     , _insertRecord = unimplemented "_insertRecord"
   >     , _sendRequest = unimplemented "_sendRequest" }
   >
-  > instance Monoid w => DB (TestFixture Fixture w s) where
+  > instance DB (TestFixture Fixture w s) where
   >   fetchRecord r = do
   >     fn <- asks _fetchRecord
   >     lift $ fn r
@@ -64,7 +64,7 @@
   >     fn <- asks _insertRecord
   >     lift $ fn r
   >
-  > instance Monoid w => HTTP (TestFixture Fixture w s) where
+  > instance HTTP (TestFixture Fixture w s) where
   >   sendRequest r = do
   >     fn <- asks _sendRequest
   >     lift $ fn r
@@ -138,14 +138,13 @@ mkInstance (ClassI (ClassD _ className _ _ methods) _) fixtureName = do
   writerVar <- VarT <$> newName "w"
   stateVar <- VarT <$> newName "s"
 
-  let monoidConstraint = AppT (ConT ''Monoid) writerVar
   let fixtureWithoutVarsT = AppT (ConT ''TestFixture) (ConT fixtureName)
   let fixtureT = AppT (AppT fixtureWithoutVarsT writerVar) stateVar
   let instanceHead = AppT (ConT className) fixtureT
 
   funDecls <- traverse mkDictInstanceFunc methods
 
-  return $ mkInstanceD [monoidConstraint] instanceHead funDecls
+  return $ mkInstanceD [] instanceHead funDecls
 mkInstance other _ = fail $ "mkInstance: expected a class name, given " ++ show other
 
 {-|
