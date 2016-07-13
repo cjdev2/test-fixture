@@ -56,6 +56,14 @@
   >     , _insertRecord = unimplemented "_insertRecord"
   >     , _sendRequest = unimplemented "_sendRequest" }
   >
+  > type FixturePure = Fixture (TestFixture Fixture () ())
+  >
+  > type FixtureLog log = Fixture (TestFixture Fixture log ())
+  >
+  > type FixtureState state = Fixture (TestFixture Fixture () state)
+  >
+  > type FixtureLogState log state = Fixture (TestFixture Fixture log state)
+  >
   > instance DB (TestFixture Fixture w s) where
   >   fetchRecord r = do
   >     fn <- asks _fetchRecord
@@ -79,6 +87,7 @@ module Control.Monad.TestFixture.TH
 
 import qualified Control.Monad.Reader as Reader
 
+import Prelude hiding (log)
 import Control.Monad (join, replicateM)
 import Control.Monad.TestFixture (TestFixture, unimplemented)
 import Data.Default (Default(..))
@@ -100,12 +109,13 @@ mkFixture fixtureNameStr classNames = do
   let fixtureName = mkName fixtureNameStr
 
   (fixtureDec, fixtureFields) <- mkFixtureRecord fixtureName classNames
+  typeSynonyms <- mkFixtureTypeSynonyms fixtureName
   defaultInstanceDec <- mkDefaultInstance fixtureName fixtureFields
 
   infos <- traverse reify classNames
   instanceDecs <- traverse (flip mkInstance fixtureName) infos
 
-  return ([fixtureDec, defaultInstanceDec] ++ instanceDecs)
+  return ([fixtureDec, defaultInstanceDec] ++ typeSynonyms ++ instanceDecs)
 
 mkFixtureRecord :: Name -> [Name] -> Q (Dec, [VarStrictType])
 mkFixtureRecord fixtureName classNames = do
@@ -119,6 +129,28 @@ mkFixtureRecord fixtureName classNames = do
 
   let fixtureDec = mkDataD [] fixtureName [PlainTV mVar] fixtureCs
   return (fixtureDec, fixtureFields)
+
+mkFixtureTypeSynonyms :: Name -> Q [Dec]
+mkFixtureTypeSynonyms fixtureName = do
+  logName <- newName "log"
+  stateName <- newName "state"
+
+  let logVar = VarT logName
+  let stateVar = VarT stateName
+
+  let logTVBndr = PlainTV logName
+  let stateTVBndr = PlainTV stateName
+
+  let fixturePure = mkTypeSynonym "Pure" [] (mkFixtureType unit unit)
+  let fixtureLog = mkTypeSynonym "Log" [logTVBndr] (mkFixtureType logVar unit)
+  let fixtureState = mkTypeSynonym "State" [stateTVBndr] (mkFixtureType unit stateVar)
+  let fixtureLogState = mkTypeSynonym "LogState" [logTVBndr, stateTVBndr] (mkFixtureType logVar stateVar)
+
+  return [fixturePure, fixtureLog, fixtureState, fixtureLogState]
+  where
+    unit = TupleT 0
+    mkTypeSynonym suffix varBndr ty = TySynD (mkName (nameBase fixtureName ++ suffix)) varBndr ty
+    mkFixtureType log state = AppT (ConT fixtureName) (AppT (AppT (AppT (ConT ''TestFixture) (ConT fixtureName)) log) state)
 
 mkDefaultInstance :: Name -> [VarStrictType] -> Q Dec
 mkDefaultInstance fixtureName fixtureFields = do

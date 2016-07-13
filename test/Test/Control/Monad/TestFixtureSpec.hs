@@ -39,6 +39,19 @@ useDBAndHTTP record = do
 
 mkFixture "Fixture" [''DB, ''HTTP]
 
+-- At compile time, ensure the fixture type synonyms are generated.
+fixturePure :: FixturePure
+fixturePure = def :: Fixture (TestFixture Fixture () ())
+
+fixtureLog :: FixtureLog log
+fixtureLog = def :: Fixture (TestFixture Fixture log ())
+
+fixtureState :: FixtureState state
+fixtureState = def :: Fixture (TestFixture Fixture () s)
+
+fixtureLogState :: FixtureLogState log state
+fixtureLogState = def :: Fixture (TestFixture Fixture log state)
+
 spec :: Spec
 spec =
   describe "mkFixture" $
