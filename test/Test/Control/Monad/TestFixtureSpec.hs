@@ -7,6 +7,7 @@ module Test.Control.Monad.TestFixtureSpec (spec) where
 
 import Test.Hspec
 
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.TestFixture
 import Control.Monad.TestFixture.TH
 
@@ -31,13 +32,16 @@ class Monad m => DB m where
 class Monad m => HTTP m where
   sendRequest :: HTTPRequest -> m (Either HTTPError HTTPResponse)
 
+class Monad m => Throw m where
+  throwMessage :: String -> m a
+
 useDBAndHTTP :: (DB m, HTTP m, DBRecord r) => r -> m (Either DBError r)
 useDBAndHTTP record = do
   (Right (Id recordId)) <- insertRecord record
   (Right response) <- sendRequest $ GET ("/record/" ++ show recordId)
   fetchRecord $ Id (responseStatus response)
 
-mkFixture "Fixture" [''DB, ''HTTP]
+mkFixture "Fixture" [''DB, ''HTTP, ''Throw]
 
 -- At compile time, ensure the fixture type synonyms are generated.
 fixturePure :: FixturePure
@@ -52,8 +56,20 @@ fixtureState = def :: Fixture (TestFixture Fixture () s)
 fixtureLogState :: FixtureLogState log state
 fixtureLogState = def :: Fixture (TestFixture Fixture log state)
 
+fixturePureT :: Monad m => FixturePureT m
+fixturePureT = def :: Fixture (TestFixtureT Fixture () () m)
+
+fixtureLogT :: Monad m => FixtureLogT log m
+fixtureLogT = def :: Fixture (TestFixtureT Fixture log () m)
+
+fixtureStateT :: Monad m => FixtureStateT state m
+fixtureStateT = def :: Fixture (TestFixtureT Fixture () s m)
+
+fixtureLogStateT :: Monad m => FixtureLogStateT log state m
+fixtureLogStateT = def :: Fixture (TestFixtureT Fixture log state m)
+
 spec :: Spec
-spec =
+spec = do
   describe "mkFixture" $
     it "generates a fixture type that can be used to stub out methods" $ do
       let fixture = def
@@ -63,3 +79,17 @@ spec =
             }
       let result = unTestFixture (useDBAndHTTP User) fixture
       result `shouldBe` Right User
+
+  describe "handle throws" $ do
+    it "capture a thrown error message" $ let
+      throwFixture :: FixturePureT (Either String)
+      throwFixture = def
+        { _throwMessage = \msg -> lift (Left msg)
+        }
+
+      throwExample :: Throw m => m ()
+      throwExample = throwMessage "error message"
+
+      actual = unTestFixtureT throwExample throwFixture
+      expected = Left "error message"
+      in actual `shouldBe` expected

@@ -48,13 +48,15 @@
   > data Fixture m =
   >   { _fetchRecord :: DBRecord a => Id a -> m (Either DBError a)
   >   , _insertRecord :: DBRecord a => a -> m (Either DBError (Id a))
-  >   , _sendRequest :: HTTPRequest -> m (Either HTTPError HTTPResponse) }
+  >   , _sendRequest :: HTTPRequest -> m (Either HTTPError HTTPResponse)
+  >   }
   >
   > instance Default (Fixture m) where
-  >   def =
+  >   def = Fixture
   >     { _fetchRecord = unimplemented "_fetchRecord"
   >     , _insertRecord = unimplemented "_insertRecord"
-  >     , _sendRequest = unimplemented "_sendRequest" }
+  >     , _sendRequest = unimplemented "_sendRequest"
+  >     }
   >
   > type FixturePure = Fixture (TestFixture Fixture () ())
   >
@@ -64,7 +66,15 @@
   >
   > type FixtureLogState log state = Fixture (TestFixture Fixture log state)
   >
-  > instance DB (TestFixture Fixture w s) where
+  > type FixturePureT m = Fixture (TestFixture Fixture () () m)
+  >
+  > type FixtureLogT log m = Fixture (TestFixture Fixture log () m)
+  >
+  > type FixtureStateT state m = Fixture (TestFixture Fixture () state m)
+  >
+  > type FixtureLogStateT log state m = Fixture (TestFixtureT Fixture log state m)
+  >
+  > instance Monad m => DB (TestFixtureT Fixture w s m) where
   >   fetchRecord r = do
   >     fn <- asks _fetchRecord
   >     lift $ fn r
@@ -72,7 +82,7 @@
   >     fn <- asks _insertRecord
   >     lift $ fn r
   >
-  > instance HTTP (TestFixture Fixture w s) where
+  > instance Monad m => HTTP (TestFixtureT Fixture w s m) where
   >   sendRequest r = do
   >     fn <- asks _sendRequest
   >     lift $ fn r
@@ -89,7 +99,7 @@ import qualified Control.Monad.Reader as Reader
 
 import Prelude hiding (log)
 import Control.Monad (join, replicateM)
-import Control.Monad.TestFixture (TestFixture, unimplemented)
+import Control.Monad.TestFixture (TestFixture, TestFixtureT, unimplemented)
 import Data.Default (Default(..))
 import Data.List (foldl', nub, partition)
 import Language.Haskell.TH
@@ -132,12 +142,15 @@ mkFixtureRecord fixtureName classNames = do
 
 mkFixtureTypeSynonyms :: Name -> Q [Dec]
 mkFixtureTypeSynonyms fixtureName = do
+  mName <- newName "m"
   logName <- newName "log"
   stateName <- newName "state"
 
+  let mVar = VarT mName
   let logVar = VarT logName
   let stateVar = VarT stateName
 
+  let mTVBndr = PlainTV mName
   let logTVBndr = PlainTV logName
   let stateTVBndr = PlainTV stateName
 
@@ -145,12 +158,26 @@ mkFixtureTypeSynonyms fixtureName = do
   let fixtureLog = mkTypeSynonym "Log" [logTVBndr] (mkFixtureType logVar unit)
   let fixtureState = mkTypeSynonym "State" [stateTVBndr] (mkFixtureType unit stateVar)
   let fixtureLogState = mkTypeSynonym "LogState" [logTVBndr, stateTVBndr] (mkFixtureType logVar stateVar)
+  let fixturePureT = mkTypeSynonym "PureT" [mTVBndr] (mkFixtureTransformerType unit unit mVar)
+  let fixtureLogT = mkTypeSynonym "LogT" [logTVBndr, mTVBndr] (mkFixtureTransformerType logVar unit mVar)
+  let fixtureStateT = mkTypeSynonym "StateT" [stateTVBndr, mTVBndr] (mkFixtureTransformerType unit stateVar mVar)
+  let fixtureLogStateT = mkTypeSynonym "LogStateT" [logTVBndr, stateTVBndr, mTVBndr] (mkFixtureTransformerType logVar stateVar mVar)
 
-  return [fixturePure, fixtureLog, fixtureState, fixtureLogState]
+  return
+    [ fixturePure
+    , fixtureLog
+    , fixtureState
+    , fixtureLogState
+    , fixturePureT
+    , fixtureLogT
+    , fixtureStateT
+    , fixtureLogStateT
+    ]
   where
     unit = TupleT 0
     mkTypeSynonym suffix varBndr ty = TySynD (mkName (nameBase fixtureName ++ suffix)) varBndr ty
     mkFixtureType log state = AppT (ConT fixtureName) (AppT (AppT (AppT (ConT ''TestFixture) (ConT fixtureName)) log) state)
+    mkFixtureTransformerType log state m = AppT (ConT fixtureName) (AppT (AppT (AppT (AppT (ConT ''TestFixtureT) (ConT fixtureName)) log) state) m)
 
 mkDefaultInstance :: Name -> [VarStrictType] -> Q Dec
 mkDefaultInstance fixtureName fixtureFields = do
@@ -169,14 +196,15 @@ mkInstance :: Info -> Name -> Q Dec
 mkInstance (ClassI (ClassD _ className _ _ methods) _) fixtureName = do
   writerVar <- VarT <$> newName "w"
   stateVar <- VarT <$> newName "s"
+  mVar <- VarT <$> newName "m"
 
-  let fixtureWithoutVarsT = AppT (ConT ''TestFixture) (ConT fixtureName)
-  let fixtureT = AppT (AppT fixtureWithoutVarsT writerVar) stateVar
+  let fixtureWithoutVarsT = AppT (ConT ''TestFixtureT) (ConT fixtureName)
+  let fixtureT = AppT (AppT (AppT fixtureWithoutVarsT writerVar) stateVar) mVar
   let instanceHead = AppT (ConT className) fixtureT
 
   funDecls <- traverse mkDictInstanceFunc methods
 
-  return $ mkInstanceD [] instanceHead funDecls
+  return $ mkInstanceD [AppT (ConT ''Monad) mVar] instanceHead funDecls
 mkInstance other _ = fail $ "mkInstance: expected a class name, given " ++ show other
 
 {-|
