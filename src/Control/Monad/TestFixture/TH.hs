@@ -59,19 +59,13 @@
   >     }
   >
   > type FixturePure = Fixture (TestFixture Fixture () ())
-  >
   > type FixtureLog log = Fixture (TestFixture Fixture log ())
-  >
   > type FixtureState state = Fixture (TestFixture Fixture () state)
-  >
   > type FixtureLogState log state = Fixture (TestFixture Fixture log state)
   >
   > type FixturePureT m = Fixture (TestFixture Fixture () () m)
-  >
   > type FixtureLogT log m = Fixture (TestFixture Fixture log () m)
-  >
   > type FixtureStateT state m = Fixture (TestFixture Fixture () state m)
-  >
   > type FixtureLogStateT log state m = Fixture (TestFixtureT Fixture log state m)
   >
   > instance Monad m => DB (TestFixtureT Fixture w s m) where
