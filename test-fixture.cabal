@@ -57,3 +57,5 @@ test-suite test-fixture-test-suite
     , test-fixture
     , hspec
     , hspec-discover
+    , transformers
+    , mtl
