@@ -160,7 +160,7 @@
   > instance Monoid log => LookupUser (TestFixture Fixture log state) where
   >   lookupUser userId = do
   >     fn <- asks _lookupUser
-  >     lift $ fn userId
+  >     fn userId
 
   Now we can write our tests using the 'unTestFixture' function, along with the
   similar 'logTestFixture' functions and friends:
@@ -313,7 +313,7 @@ runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
   > instance Monoid log => MonadSomething (TestFixture Fixture log state) where
   >   getSomething = do
   >     something <- asks _getSomething
-  >     lift something
+  >     something
 
   Using 'arg0', it can be rewritten like this:
 
@@ -333,7 +333,7 @@ arg0 rec = join $ asks rec
   > instance Monoid log => MonadSomething (TestFixture Fixture log state) where
   >   doSomething x = do
   >     fn <- asks _doSomething
-  >     lift $ fn x
+  >     fn x
 
   Using 'arg1', it can be rewritten like this:
 
