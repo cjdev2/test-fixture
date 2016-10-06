@@ -71,15 +71,15 @@
   > instance Monad m => DB (TestFixtureT Fixture w s m) where
   >   fetchRecord r = do
   >     fn <- asks _fetchRecord
-  >     lift $ fn r
+  >     fn r
   >   insertRecord r = do
   >     fn <- asks _insertRecord
-  >     lift $ fn r
+  >     fn r
   >
   > instance Monad m => HTTP (TestFixtureT Fixture w s m) where
   >   sendRequest r = do
   >     fn <- asks _sendRequest
-  >     lift $ fn r
+  >     fn r
 
   This type can then be used in tandem with "Control.Monad.TestFixture" to
   create stubbed typeclass instances and run computations using them.
