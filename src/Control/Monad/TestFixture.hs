@@ -1,6 +1,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 #if __GLASGOW_HASKELL__ >= 800
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
@@ -219,6 +222,7 @@ import Prelude hiding (log)
 import qualified Control.Monad.Writer.Class
 import qualified Control.Monad.State.Class
 
+import Control.Monad.Error.Class
 import Control.Monad.RWS
 import Data.Functor.Identity
 
@@ -241,6 +245,10 @@ newtype TestFixtureT fixture log state m a = TestFixtureT { getRWST :: RWST (fix
 
 instance MonadTrans (TestFixtureT fixture log state) where
   lift = TestFixtureT . lift
+
+instance MonadError e m => MonadError e (TestFixtureT fixture log state m) where
+  throwError = lift . throwError
+  catchError m h = TestFixtureT (getRWST m `catchError` \e -> getRWST (h e))
 
 -- | The transformer equivalent of 'unTestFixture'.
 unTestFixtureT :: Monad m => TestFixtureT fixture () () m a -> fixture (TestFixtureT fixture () () m) -> m a
