@@ -1,5 +1,7 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 
 {-|
   This module provides a Template Haskell function for automatically generating
@@ -89,10 +91,13 @@ module Control.Monad.TestFixture.TH
   , def
   ) where
 
+#if MIN_VERSION_base(4,9,0)
+import qualified Control.Monad.Fail as Fail
+#endif
 import qualified Control.Monad.Reader as Reader
 
 import Prelude hiding (log)
-import Control.Monad (join, replicateM)
+import Control.Monad (join, replicateM, zipWithM)
 import Control.Monad.TestFixture (TestFixture, TestFixtureT, unimplemented)
 import Data.Default (Default(..))
 import Data.List (foldl', nub, partition)
@@ -128,7 +133,7 @@ mkFixtureRecord fixtureName classNames = do
   methods <- traverse classMethods info
 
   mVar <- newName "m"
-  let fixtureFields = join $ zipWith (methodsToFields mVar) types methods
+  fixtureFields <- join <$> zipWithM (methodsToFields mVar) types methods
   let fixtureCs = [RecC fixtureName fixtureFields]
 
   let fixtureDec = mkDataD [] fixtureName [PlainTV mVar] fixtureCs
@@ -204,7 +209,7 @@ mkInstance other _ = fail $ "mkInstance: expected a class name, given " ++ show 
 {-|
   Given some 'Info' about a class, get its methods as 'SigD' declarations.
 -}
-classMethods :: Info -> Q [Dec]
+classMethods :: MonadFail m => Info -> m [Dec]
 classMethods (ClassI (ClassD _ _ _ _ methods) _) = return methods
 classMethods other = fail $ "classMethods: expected a class name, given " ++ show other
 
@@ -212,8 +217,8 @@ classMethods other = fail $ "classMethods: expected a class name, given " ++ sho
   Helper for applying `methodToField` over multiple methods using the same name
   replacement for a particular typeclass.
 -}
-methodsToFields :: Name -> Type -> [Dec] -> [VarStrictType]
-methodsToFields name typ = map (methodToField name typ)
+methodsToFields :: MonadFail m => Name -> Type -> [Dec] -> m [VarStrictType]
+methodsToFields name typ = mapM (methodToField name typ)
 
 {-|
   Converts a typeclass’s method (represented as a 'SigD') to a record field.
@@ -244,11 +249,11 @@ methodsToFields name typ = map (methodToField name typ)
        the 'Name' is the name of a replacement type variable, and the 'Type'
        is the typeclass whose constraint must be removed.
 -}
-methodToField :: Name -> Type -> Dec -> VarStrictType
-methodToField mVar classT (SigD name typ) = (fieldName, noStrictness, newT)
+methodToField :: MonadFail m => Name -> Type -> Dec -> m VarStrictType
+methodToField mVar classT (SigD name typ) = (fieldName, noStrictness,) <$> newT
   where fieldName = methodNameToFieldName name
         newT = replaceClassConstraint classT mVar typ
-methodToField _ _ _ = error "internal error; report a bug with the test-fixture package"
+methodToField _ _ _ = fail "methodToField: internal error; report a bug with the test-fixture package"
 
 {-|
   Prepends a name with the @_@ character to avoid name clashes when generating
@@ -264,13 +269,17 @@ methodNameToFieldName name = mkName ('_' : nameBase name)
   type variable, it replaces the uses of that type variable everywhere in the
   quantified type and removes the constraint.
 -}
-replaceClassConstraint :: Type -> Name -> Type -> Type
-replaceClassConstraint constraint freeVar (ForallT vars preds typ) = ForallT newVars newPreds replacedT
-  where (newPreds, [replacedPred]) = partition ((constraint /=) . unappliedType) preds
-        [replacedVar] = typeVarNames replacedPred
-        newVars = filter ((replacedVar /=) . tyVarBndrName) vars
-        replacedT = replaceTypeVarName replacedVar freeVar typ
-replaceClassConstraint _ _ _ = error "internal error; report a bug with the test-fixture package"
+replaceClassConstraint :: MonadFail m => Type -> Name -> Type -> m Type
+replaceClassConstraint constraint freeVar (ForallT vars preds typ) = do
+  let (newPreds, [replacedPred]) = partition ((constraint /=) . unappliedType) preds
+  -- check that this is a single-parameter typeclass
+  replacedVar <- case typeVarNames replacedPred of
+    [singleVar] -> return singleVar
+    _           -> fail "generating instances of multi-parameter typeclasses is currently unsupported"
+  let newVars = filter ((replacedVar /=) . tyVarBndrName) vars
+      replacedT = replaceTypeVarName replacedVar freeVar typ
+  return $ ForallT newVars newPreds replacedT
+replaceClassConstraint _ _ _ = fail "replaceClassConstraint: internal error; report a bug with the test-fixture package"
 
 {-|
   Performs an alpha-renaming within a particular type. Of course, a pure alpha-
@@ -388,10 +397,16 @@ applyE :: Exp -> [Exp] -> Exp
 applyE = foldl' AppE
 
 {------------------------------------------------------------------------------|
-| The following functions abstract over differences in template-haskell        |
-| between GHC versions. This allows the same code to work without writing CPP  |
-| everywhere and ending up with a small mess.                                  |
+| The following definitions abstract over differences in base and              |
+| template-haskell between GHC versions. This allows the same code to work     |
+| without writing CPP everywhere and ending up with a small mess.              |
 |------------------------------------------------------------------------------}
+
+#if MIN_VERSION_base(4,9,0)
+type MonadFail = Fail.MonadFail
+#else
+type MonadFail = Monad
+#endif
 
 mkInstanceD :: Cxt -> Type -> [Dec] -> Dec
 #if MIN_VERSION_template_haskell(2,11,0)
