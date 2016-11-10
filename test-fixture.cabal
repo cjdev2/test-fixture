@@ -33,6 +33,7 @@ library
   exposed-modules:
     Control.Monad.TestFixture
     Control.Monad.TestFixture.TH
+    Control.Monad.TestFixture.TH.Internal
   build-depends:
       base >= 4.7 && < 5
     , data-default
