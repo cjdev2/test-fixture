@@ -1,11 +1,11 @@
 resolver:
-  nightly-2016-06-21
+  lts-7.8
 
 packages:
 - '.'
 
 extra-deps:
-  []
+- th-to-exp-0.0.1.0
 
 flags:
   {}

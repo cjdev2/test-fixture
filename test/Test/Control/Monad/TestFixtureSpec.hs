@@ -1,3 +1,11 @@
+{-# LANGUAGE CPP #-}
+
+#if MIN_VERSION_GLASGOW_HASKELL(8,0,0,0)
+{-# OPTIONS_GHC -fno-warn-unused-top-binds -fno-warn-redundant-constraints #-}
+#else
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+#endif
+
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
