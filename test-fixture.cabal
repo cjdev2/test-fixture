@@ -1,7 +1,7 @@
 name:
   test-fixture
 version:
-  0.4.1.0
+  0.4.2.0
 synopsis:
   Test monadic side-effects
 description:
@@ -22,7 +22,10 @@ category:
   Test
 build-type:
   Simple
--- extra-source-files:
+extra-source-files:
+  CHANGELOG.md
+  LICENSE
+  README.md
 cabal-version:
    >=1.10
 
