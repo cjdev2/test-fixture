@@ -76,6 +76,9 @@ fixtureStateT = def :: Fixture (TestFixtureT Fixture () s m)
 fixtureLogStateT :: Monad m => FixtureLogStateT log state m
 fixtureLogStateT = def :: Fixture (TestFixtureT Fixture log state m)
 
+-- ensure generation of empty fixtures works
+mkFixture "EmptyFixture" []
+
 spec :: Spec
 spec = do
   describe "mkFixture" $

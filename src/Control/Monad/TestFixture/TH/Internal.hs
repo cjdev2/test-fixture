@@ -52,7 +52,8 @@ mkFixtureRecord fixtureName classNames = do
   fixtureFields <- join <$> zipWithM (methodsToFields mVar) types methods
   let fixtureCs = [RecC fixtureName fixtureFields]
 
-  let fixtureDec = mkDataD [] fixtureName [PlainTV mVar] fixtureCs
+  let mKind = AppT (AppT ArrowT StarT) StarT
+  let fixtureDec = mkDataD [] fixtureName [KindedTV mVar mKind] fixtureCs
   return (fixtureDec, fixtureFields)
 
 mkFixtureTypeSynonyms :: Name -> Q [Dec]
