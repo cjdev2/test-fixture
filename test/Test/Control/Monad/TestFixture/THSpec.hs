@@ -18,7 +18,6 @@ import Control.Monad (when)
 import Control.Monad.Except (runExcept, throwError)
 import Control.Monad.Fail (MonadFail(..))
 import Language.Haskell.TH.Syntax
-import Language.Haskell.TH.ToExp (toExp)
 
 import Control.Monad.TestFixture
 import Control.Monad.TestFixture.TH
@@ -35,7 +34,7 @@ spec = do
       let fixture = def
             { _qReport = \b s -> when b $ throwError s
             , _qNewName = \s -> return $ Name (OccName s) (NameU 0)
-            , _qReify = \_ -> return $(toExp <$> reify ''MultiParam)
+            , _qReify = \_ -> return $(lift =<< reify ''MultiParam)
             }
       let result = runExcept $ unTestFixtureT (runQ $ mkFixture "Fixture" [ts| MultiParam |]) fixture
       result `shouldBe` (Left $

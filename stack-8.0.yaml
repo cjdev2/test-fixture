@@ -4,8 +4,7 @@ resolver:
 packages:
 - '.'
 
-extra-deps:
-- th-to-exp-0.0.1.0
+extra-deps: []
 
 flags:
   {}

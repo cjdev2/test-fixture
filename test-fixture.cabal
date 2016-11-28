@@ -70,6 +70,3 @@ test-suite test-fixture-test-suite
     , mtl
     , template-haskell >= 2.10 && < 2.12
     , transformers
-  if impl(ghc >= 8.0.0.0)
-    build-depends:
-      th-to-exp
