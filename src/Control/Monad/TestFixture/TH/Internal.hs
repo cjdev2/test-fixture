@@ -12,11 +12,12 @@ import qualified Control.Monad.Fail as Fail
 import qualified Control.Monad.Reader as Reader
 
 import Prelude hiding (log)
-import Control.Monad (join, replicateM, zipWithM)
+import Control.Monad (join, replicateM, when, zipWithM)
 import Control.Monad.TestFixture (TestFixture, TestFixtureT, unimplemented)
 import Data.Char (isPunctuation, isSymbol)
 import Data.Default (Default(..))
 import Data.List (foldl', nub, partition)
+import GHC.Exts (Constraint)
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
 
@@ -27,29 +28,39 @@ import Language.Haskell.TH.Syntax
   following splice would create a new record type called @Fixture@ with fields
   and instances for typeclasses called @Foo@ and @Bar@:
 
-  > mkFixture "Fixture" [''Foo, ''Bar]
--}
-mkFixture :: String -> [Name] -> Q [Dec]
-mkFixture fixtureNameStr classNames = do
-  let fixtureName = mkName fixtureNameStr
+  > mkFixture "Fixture" [ts| Foo, Bar |]
 
-  (fixtureDec, fixtureFields) <- mkFixtureRecord fixtureName classNames
+  'mkFixture' supports types in the same format that @deriving@ clauses do when
+  used with the @GeneralizedNewtypeDeriving@ GHC extension, so deriving
+  multi-parameter typeclasses is possible if they are partially applied. For
+  example, the following is valid:
+
+  > class MultiParam a m where
+  >   doSomething :: a -> m ()
+  >
+  > mkFixture "Fixture" [ts| MultiParam String |]
+-}
+mkFixture :: String -> [Type] -> Q [Dec]
+mkFixture fixtureNameStr classTypes = do
+  let fixtureName = mkName fixtureNameStr
+  mapM_ assertDerivableConstraint classTypes
+
+  (fixtureDec, fixtureFields) <- mkFixtureRecord fixtureName classTypes
   typeSynonyms <- mkFixtureTypeSynonyms fixtureName
   defaultInstanceDec <- mkDefaultInstance fixtureName fixtureFields
 
-  infos <- traverse reify classNames
-  instanceDecs <- traverse (flip mkInstance fixtureName) infos
+  instanceDecs <- traverse (flip mkInstance fixtureName) classTypes
 
   return ([fixtureDec, defaultInstanceDec] ++ typeSynonyms ++ instanceDecs)
 
-mkFixtureRecord :: Name -> [Name] -> Q (Dec, [VarStrictType])
-mkFixtureRecord fixtureName classNames = do
-  types <- traverse conT classNames
+mkFixtureRecord :: Name -> [Type] -> Q (Dec, [VarStrictType])
+mkFixtureRecord fixtureName classTypes = do
+  let classNames = map unappliedTypeName classTypes
   info <- traverse reify classNames
   methods <- traverse classMethods info
 
   mVar <- newName "m"
-  fixtureFields <- join <$> zipWithM (methodsToFields mVar) types methods
+  fixtureFields <- join <$> zipWithM (methodsToFields mVar) classTypes methods
   let fixtureCs = [RecC fixtureName fixtureFields]
 
   let mKind = AppT (AppT ArrowT StarT) StarT
@@ -108,20 +119,57 @@ mkDefaultInstance fixtureName fixtureFields = do
 
   return $ mkInstanceD [] (AppT (ConT ''Default) appliedFixtureT) [defDecl]
 
-mkInstance :: Info -> Name -> Q Dec
-mkInstance (ClassI (ClassD _ className _ _ methods) _) fixtureName = do
+mkInstance :: Type -> Name -> Q Dec
+mkInstance classType fixtureName = do
   writerVar <- VarT <$> newName "w"
   stateVar <- VarT <$> newName "s"
   mVar <- VarT <$> newName "m"
 
   let fixtureWithoutVarsT = AppT (ConT ''TestFixtureT) (ConT fixtureName)
   let fixtureT = AppT (AppT (AppT fixtureWithoutVarsT writerVar) stateVar) mVar
-  let instanceHead = AppT (ConT className) fixtureT
+  let instanceHead = AppT classType fixtureT
 
+  classInfo <- reify (unappliedTypeName classType)
+  methods <- case classInfo of
+    ClassI (ClassD _ _ _ _ methods) _ -> return methods
+    _ -> fail $ "mkInstance: expected a class type, given " ++ show classType
   funDecls <- traverse mkDictInstanceFunc methods
 
   return $ mkInstanceD [AppT (ConT ''Monad) mVar] instanceHead funDecls
-mkInstance other _ = fail $ "mkInstance: expected a class name, given " ++ show other
+
+{-|
+  Ensures that a provided constraint is something test-fixture can actually
+  derive an instance for. Specifically, it must be a constraint of kind
+  * -> Constraint, and anything else is invalid.
+-}
+assertDerivableConstraint :: Type -> Q ()
+assertDerivableConstraint classType = do
+  info <- reify $ unappliedTypeName classType
+  (ClassD _ _ classVars _ _) <- case info of
+    ClassI dec _ -> return dec
+    _ -> fail $ "mkFixture: expected a constraint, given ‘" ++ show (ppr classType) ++ "’"
+
+  let classArgs = typeArgs classType
+  let mkClassKind vars = foldr (\a b -> AppT (AppT ArrowT a) b) (ConT ''Constraint) (reverse varKinds)
+        where varKinds = map (\(KindedTV _ k) -> k) vars
+      constraintStr = show (ppr (ConT ''Constraint))
+
+  when (length classArgs > length classVars) $
+    fail $ "mkFixture: too many arguments for class\n"
+        ++ "      in: " ++ show (ppr classType) ++ "\n"
+        ++ "      for class of kind: " ++ show (ppr (mkClassKind classVars))
+
+  when (length classArgs == length classVars) $
+    fail $ "mkFixture: cannot derive instance for fully saturated constraint\n"
+        ++ "      in: " ++ show (ppr classType) ++ "\n"
+        ++ "      expected: * -> " ++ constraintStr ++ "\n"
+        ++ "      given: " ++ constraintStr
+
+  when (length classArgs < length classVars - 1) $
+    fail $ "mkFixture: cannot derive instance for multi-parameter typeclass\n"
+        ++ "      in: " ++ show (ppr classType) ++ "\n"
+        ++ "      expected: * -> " ++ constraintStr ++ "\n"
+        ++ "      given: " ++ show (ppr (mkClassKind $ drop (length classArgs) classVars))
 
 {-|
   Given some 'Info' about a class, get its methods as 'SigD' declarations.
@@ -191,35 +239,50 @@ methodNameToFieldName name = mkName (prefixChar : nameBase name)
   quantified type and removes the constraint.
 -}
 replaceClassConstraint :: MonadFail m => Type -> Name -> Type -> m Type
-replaceClassConstraint constraint freeVar (ForallT vars preds typ) = do
-  let (newPreds, [replacedPred]) = partition ((constraint /=) . unappliedType) preds
-  -- check that this is a single-parameter typeclass
-  replacedVar <- case typeVarNames replacedPred of
-    [singleVar] -> return singleVar
-    _           -> fail "generating instances of multi-parameter typeclasses is currently unsupported"
-  let newVars = filter ((replacedVar /=) . tyVarBndrName) vars
-      replacedT = replaceTypeVarName replacedVar freeVar typ
-  return $ ForallT newVars newPreds replacedT
+replaceClassConstraint classType freeVar (ForallT vars preds typ) =
+  let -- split the provided class into the typeclass and its arguments:
+      --
+      --             MonadFoo Int Bool
+      --             ^^^^^^^^ ^^^^^^^^
+      --                 |       |
+      --  unappliedClassType   classTypeArgs
+      unappliedClassType = unappliedType classType
+      classTypeArgs = typeArgs classType
+
+      -- find the constraint that belongs to the typeclass by searching for the
+      -- constaint with the same base type
+      ([replacedPred], newPreds) = partition ((unappliedClassType ==) . unappliedType) preds
+
+      -- Get the type vars that we need to replace, and match them with their
+      -- replacements. Since we have already validated that classType is the
+      -- same as replacedPred but missing one argument (via
+      -- assertDerivableConstraint), we can easily align the types we need to
+      -- replace with their instantiations.
+      replacedVars = typeVarNames replacedPred
+      replacementTypes = classTypeArgs ++ [VarT freeVar]
+
+      -- get the remaining vars in the forall quantification after stripping out
+      -- the ones we’re replacing
+      newVars = filter ((`notElem` replacedVars) . tyVarBndrName) vars
+
+      -- actually perform the replacement substitution for each type var and its replacement
+      replacedT = foldl' (flip $ uncurry substituteTypeVar) typ (zip replacedVars replacementTypes)
+  in return $ ForallT newVars newPreds replacedT
 replaceClassConstraint _ _ _ = fail "replaceClassConstraint: internal error; report a bug with the test-fixture package"
 
 {-|
-  Performs an alpha-renaming within a particular type. Of course, a pure alpha-
-  renaming would be pretty useless, but this function can be useful because it
-  it unhygienic in the sense that type variables can be replaced with others
-  with separate bindings.
-
-  This is used by 'replaceClassConstraint' to swap out the constrained and
-  quantified type variable with the type variable bound within the record
-  declaration.
+  Substitutes a type variable with a type within a particular type. This is used
+  by 'replaceClassConstraint' to swap out the constrained and quantified type
+  variable with the type variable bound within the record declaration.
 -}
-replaceTypeVarName :: Name -> Name -> Type -> Type
-replaceTypeVarName initial replacement = doReplace
+substituteTypeVar :: Name -> Type -> Type -> Type
+substituteTypeVar initial replacement = doReplace
   where doReplace (ForallT a b t) = ForallT a b (doReplace t)
         doReplace (AppT a b) = AppT (doReplace a) (doReplace b)
         doReplace (SigT t k) = SigT (doReplace t) k
-        doReplace (VarT n)
-          | n == initial = VarT replacement
-          | otherwise    = VarT n
+        doReplace t@(VarT n)
+          | n == initial = replacement
+          | otherwise    = t
         doReplace other = other
 
 {-|
@@ -276,6 +339,19 @@ unappliedType :: Type -> Type
 unappliedType t@ConT{} = t
 unappliedType (AppT t _) = unappliedType t
 unappliedType other = error $ "expected plain applied type, given " ++ show other
+
+{-|
+  Like 'unappliedType', but extracts the 'Name' instead of 'Type'.
+-}
+unappliedTypeName :: Type -> Name
+unappliedTypeName t = let (ConT name) = unappliedType t in name
+
+{-|
+  The inverse of 'unappliedType', this gets the arguments a type is applied to.
+-}
+typeArgs :: Type -> [Type]
+typeArgs (AppT t a) = typeArgs t ++ [a]
+typeArgs _          = []
 
 {-|
   Given a type, returns a list of all of the unique type variables contained

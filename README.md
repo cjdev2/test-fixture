@@ -33,7 +33,7 @@ sendAndFetch = ...
 Testing this function might be difficult because of all the different possible combinations of scenarios that must be considered. Creating lots of different monads and instances for each case can be boilerplate-heavy and tedious. Using test-fixture, the boilerplate is unnecessary:
 
 ```haskell
-mkFixture "Fixture" [''MonadDB, ''MonadHTTP]
+mkFixture "Fixture" [ts| MonadDB, MonadHTTP |]
 
 spec = describe "sendAndFetch" $ do
   it "returns a record when the http request and db fetch are successful" $ do

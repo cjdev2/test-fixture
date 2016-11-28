@@ -37,11 +37,15 @@ library
     Control.Monad.TestFixture
     Control.Monad.TestFixture.TH
     Control.Monad.TestFixture.TH.Internal
+    Control.Monad.TestFixture.TH.Internal.TypesQuasi
   build-depends:
       base >= 4.7 && < 5
     , data-default
+    , haskell-src-exts
+    , haskell-src-meta
     , mtl
     , template-haskell >= 2.10 && < 2.12
+    , th-orphans
 
 source-repository head
   type:

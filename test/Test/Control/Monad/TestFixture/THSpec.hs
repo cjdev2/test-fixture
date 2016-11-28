@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
@@ -24,11 +25,8 @@ import Control.Monad.TestFixture.TH
 import Control.Monad.TestFixture.TH.Internal (methodNameToFieldName)
 
 class MultiParam a b where
-  -- currently, an error is not raised unless the typeclass has at least one
-  -- method, but it really ought to be
-  multiParamMethod :: a -> b -> ()
 
-mkFixture "Fixture" [''MonadFail, ''Quasi]
+mkFixture "Fixture" [ts| MonadFail, Quasi |]
 
 spec :: Spec
 spec = do
@@ -39,8 +37,12 @@ spec = do
             , _qNewName = \s -> return $ Name (OccName s) (NameU 0)
             , _qReify = \_ -> return $(toExp <$> reify ''MultiParam)
             }
-      let result = runExcept $ unTestFixtureT (runQ $ mkFixture "Fixture" [''MultiParam]) fixture
-      result `shouldBe` Left "generating instances of multi-parameter typeclasses is currently unsupported"
+      let result = runExcept $ unTestFixtureT (runQ $ mkFixture "Fixture" [ts| MultiParam |]) fixture
+      result `shouldBe` (Left $
+           "mkFixture: cannot derive instance for multi-parameter typeclass\n"
+        ++ "      in: Test.Control.Monad.TestFixture.THSpec.MultiParam\n"
+        ++ "      expected: * -> GHC.Types.Constraint\n"
+        ++ "      given: * -> * -> GHC.Types.Constraint")
 
   describe "methodNameToFieldName" $ do
     it "prepends an underscore to ordinary names" $ do

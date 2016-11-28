@@ -41,7 +41,7 @@
   one might use 'mkFixture' to create some utilities for stubbing these
   typeclasses out:
 
-  > mkFixture "Fixture" [''DB, ''HTTP]
+  > mkFixture "Fixture" [ts| DB, HTTP |]
 
   This generates code much like the following:
 
@@ -87,7 +87,9 @@
 module Control.Monad.TestFixture.TH
   ( mkFixture
   , def
+  , ts
   ) where
 
 import Control.Monad.TestFixture.TH.Internal (mkFixture)
+import Control.Monad.TestFixture.TH.Internal.TypesQuasi (ts)
 import Data.Default (def)

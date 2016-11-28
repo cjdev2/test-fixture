@@ -7,7 +7,10 @@
 #endif
 
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -49,7 +52,7 @@ useDBAndHTTP record = do
   (Right response) <- sendRequest $ GET ("/record/" ++ show recordId)
   fetchRecord $ Id (responseStatus response)
 
-mkFixture "Fixture" [''DB, ''HTTP, ''Throw]
+mkFixture "Fixture" [ts| DB, HTTP, Throw |]
 
 -- At compile time, ensure the fixture type synonyms are generated.
 fixturePure :: FixturePure
@@ -79,9 +82,14 @@ fixtureLogStateT = def :: Fixture (TestFixtureT Fixture log state m)
 -- ensure generation of empty fixtures works
 mkFixture "EmptyFixture" []
 
+-- ensure fixtures can be generated for partially applied multi-parameter typeclasses
+class MultiParam e m | m -> e where
+  firstParam :: m e
+mkFixture "MultiParamFixture" [ts| MultiParam Bool |]
+
 spec :: Spec
 spec = do
-  describe "mkFixture" $
+  describe "mkFixture" $ do
     it "generates a fixture type that can be used to stub out methods" $ do
       let fixture = def
             { _fetchRecord = \_ -> return $ Right procureRecord
@@ -90,6 +98,10 @@ spec = do
             }
       let result = unTestFixture (useDBAndHTTP User) fixture
       result `shouldBe` Right User
+
+    it "can handle partially applied multi parameter typeclasses" $ do
+      let fixture = def { _firstParam = return True }
+      unTestFixture firstParam fixture `shouldBe` True
 
   describe "handle throws" $ do
     it "capture a thrown error message" $ let
