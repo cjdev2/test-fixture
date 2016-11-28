@@ -40,7 +40,7 @@ library
     Control.Monad.TestFixture.TH.Internal.TypesQuasi
   build-depends:
       base >= 4.7 && < 5
-    , data-default
+    , data-default-class
     , haskell-src-exts
     , haskell-src-meta
     , mtl

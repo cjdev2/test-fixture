@@ -15,7 +15,7 @@ import Prelude hiding (log)
 import Control.Monad (join, replicateM, when, zipWithM)
 import Control.Monad.TestFixture (TestFixture, TestFixtureT, unimplemented)
 import Data.Char (isPunctuation, isSymbol)
-import Data.Default (Default(..))
+import Data.Default.Class (Default(..))
 import Data.List (foldl', nub, partition)
 import GHC.Exts (Constraint)
 import Language.Haskell.TH

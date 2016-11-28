@@ -92,4 +92,4 @@ module Control.Monad.TestFixture.TH
 
 import Control.Monad.TestFixture.TH.Internal (mkFixture)
 import Control.Monad.TestFixture.TH.Internal.TypesQuasi (ts)
-import Data.Default (def)
+import Data.Default.Class (def)
