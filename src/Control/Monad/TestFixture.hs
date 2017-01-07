@@ -251,15 +251,15 @@ instance MonadError e m => MonadError e (TestFixtureT fixture log state m) where
   catchError m h = TestFixtureT (getRWST m `catchError` \e -> getRWST (h e))
 
 -- | The transformer equivalent of 'unTestFixture'.
-unTestFixtureT :: Monad m => TestFixtureT fixture () () m a -> fixture (TestFixtureT fixture () () m) -> m a
+unTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> m a
 unTestFixtureT stack env = fmap fst (evalTestFixtureT stack env)
 
 -- | The transformer equivalent of 'logTestFixture'.
-logTestFixtureT :: Monad m => TestFixtureT fixture log () m a -> fixture (TestFixtureT fixture log () m) -> m [log]
+logTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> m [log]
 logTestFixtureT stack env = fmap snd (evalTestFixtureT stack env)
 
 -- | The transformer equivalent of 'evalTestFixture'.
-evalTestFixtureT :: Monad m => TestFixtureT fixture log () m a -> fixture (TestFixtureT fixture log () m) -> m (a, [log])
+evalTestFixtureT :: Monad m => TestFixtureT fixture log state m a -> fixture (TestFixtureT fixture log state m) -> m (a, [log])
 evalTestFixtureT stack env = evalRWST (getRWST stack) env ()
 
 -- | The transformer equivalent of 'execTestFixture'.
@@ -276,8 +276,8 @@ runTestFixtureT stack env st = runRWST (getRWST stack) env st
   result. Useful for testing impure functions that return useful values.
 -}
 unTestFixture
-  :: TestFixture fixture () () a         -- ^ the monadic computation to run
-  -> fixture (TestFixture fixture () ()) -- ^ the fixture dictionary to use
+  :: TestFixture fixture log state a         -- ^ the monadic computation to run
+  -> fixture (TestFixture fixture log state) -- ^ the fixture dictionary to use
   -> a                                   -- ^ the computation’s result
 unTestFixture stack env = runIdentity (unTestFixtureT stack env)
 
@@ -287,14 +287,14 @@ unTestFixture stack env = runIdentity (unTestFixtureT stack env)
   testing impure functions called exclusively for side-effects that do not
   depend on complex prior state.
 -}
-logTestFixture :: TestFixture fixture log () a -> fixture (TestFixture fixture log ()) -> [log]
+logTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> [log]
 logTestFixture stack env = runIdentity (logTestFixtureT stack env)
 
 {-|
   Combines 'unTestFixture' and 'logTestFixture' to return /both/ the
   computation’s result and the written value as a tuple.
 -}
-evalTestFixture :: TestFixture fixture log () a -> fixture (TestFixture fixture log ()) -> (a, [log])
+evalTestFixture :: TestFixture fixture log state a -> fixture (TestFixture fixture log state) -> (a, [log])
 evalTestFixture stack env = runIdentity (evalTestFixtureT stack env)
 
 {-|
