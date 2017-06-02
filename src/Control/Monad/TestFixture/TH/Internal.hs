@@ -1,6 +1,7 @@
 {-# OPTIONS_HADDOCK hide, not-home #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -130,9 +131,7 @@ mkInstance classType fixtureName = do
   let instanceHead = AppT classType fixtureT
 
   classInfo <- reify (unappliedTypeName classType)
-  methods <- case classInfo of
-    ClassI (ClassD _ _ _ _ methods) _ -> return methods
-    _ -> fail $ "mkInstance: expected a class type, given " ++ show classType
+  methods <- classMethods classInfo
   funDecls <- traverse mkDictInstanceFunc methods
 
   return $ mkInstanceD [AppT (ConT ''Monad) mVar] instanceHead funDecls
@@ -175,8 +174,11 @@ assertDerivableConstraint classType = do
   Given some 'Info' about a class, get its methods as 'SigD' declarations.
 -}
 classMethods :: MonadFail m => Info -> m [Dec]
-classMethods (ClassI (ClassD _ _ _ _ methods) _) = return methods
-classMethods other = fail $ "classMethods: expected a class name, given " ++ show other
+classMethods (ClassI (ClassD _ _ _ _ methods) _) = return $ removeDefaultSigs methods
+  where removeDefaultSigs = filter $ \case
+          DefaultSigD{} -> False
+          _             -> True
+classMethods other = fail $ "classMethods: expected a class type, given " ++ show other
 
 {-|
   Helper for applying `methodToField` over multiple methods using the same name

@@ -1,5 +1,5 @@
 resolver:
-  lts-7.8
+  lts-8.16
 
 packages:
 - '.'

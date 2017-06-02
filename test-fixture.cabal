@@ -61,6 +61,7 @@ test-suite test-fixture-test-suite
   ghc-options: -Wall
   other-modules:
     Test.Control.Monad.TestFixtureSpec
+    Test.Control.Monad.TestFixture.DefaultSignaturesSpec
     Test.Control.Monad.TestFixture.THSpec
   build-depends:
       base >= 4.7 && < 5
