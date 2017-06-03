@@ -1,3 +1,7 @@
+# 0.5.0.1 (June 2, 2017)
+
+  - Fixed an issue where using `mkFixture` with a typeclass that used the `DefaultSignatures` extension caused an internal error ([#30](https://github.com/cjdev/test-fixture/issues/30)).
+
 # 0.5.0.0 (November 28, 2016)
 
   - **Breaking**: `mkFixture` now supports constraints in the same form as a Haskell `deriving` clause, which permits “partially-applied” constraints. A new `ts` quasiquoter is provided for the purpose of writing a comma-separated list of Haskell types; see the documentation for more details ([#25](https://github.com/cjdev/test-fixture/issues/25)).
