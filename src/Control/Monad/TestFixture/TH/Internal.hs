@@ -10,11 +10,10 @@ module Control.Monad.TestFixture.TH.Internal where
 #if MIN_VERSION_base(4,9,0)
 import qualified Control.Monad.Fail as Fail
 #endif
-import qualified Control.Monad.Reader as Reader
 
 import Prelude hiding (log)
 import Control.Monad (join, replicateM, when, zipWithM)
-import Control.Monad.TestFixture (TestFixture, TestFixtureT, unimplemented)
+import Control.Monad.TestFixture (TestFixture, TestFixtureT, asksFixture, unimplemented)
 import Data.Char (isPunctuation, isSymbol)
 import Data.Default.Class (Default(..))
 import Data.List (foldl', nub, partition)
@@ -326,7 +325,7 @@ mkDictInstanceFunc (SigD name typ) = do
   let vars = map VarE argNames
 
   implE <- [e|do
-    fn <- Reader.asks $(return askFunc)
+    fn <- asksFixture $(return askFunc)
     $(return $ applyE (VarE 'fn) vars)|]
 
   let funClause = Clause pats (NormalB implE) []

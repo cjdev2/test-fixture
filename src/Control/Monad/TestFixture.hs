@@ -197,6 +197,7 @@ module Control.Monad.TestFixture (
   , runTestFixture
   -- * The TestFixtureT monad transformer
   , TestFixtureT
+  , asksFixture
   , unTestFixtureT
   , logTestFixtureT
   , evalTestFixtureT
@@ -238,10 +239,18 @@ newtype TestFixtureT fixture log state m a = TestFixtureT { getRWST :: RWST (fix
     ( Functor
     , Applicative
     , Monad
-    , MonadReader (fixture (TestFixtureT fixture log state m))
     , MonadWriter [log]
     , MonadState state
     )
+
+-- | Fetches a method out of the current fixture.
+asksFixture :: Monad m => (fixture (TestFixtureT fixture log state m) -> b) -> TestFixtureT fixture log state m b
+asksFixture = TestFixtureT . asks
+
+instance MonadReader r m => MonadReader r (TestFixtureT fixture log state m) where
+  ask = lift ask
+  reader = lift . reader
+  local f (TestFixtureT m) = TestFixtureT $ mapRWST (local f) m
 
 instance MonadTrans (TestFixtureT fixture log state) where
   lift = TestFixtureT . lift
@@ -332,7 +341,7 @@ runTestFixture stack env st = runIdentity (runTestFixtureT stack env st)
   'arg7', instead.
 -}
 arg0 :: (fixture (TestFixture fixture log state) -> TestFixture fixture log state a) -> TestFixture fixture log state a
-arg0 rec = join $ asks rec
+arg0 rec = join $ asksFixture rec
 
 {-|
   Like 'arg0', but for lifting record accessors containing functions of arity
@@ -352,43 +361,43 @@ arg0 rec = join $ asks rec
 -}
 arg1 :: Monad m => (fixture (TestFixtureT fixture log state m) -> a -> TestFixtureT fixture log state m b) -> a -> TestFixtureT fixture log state m b
 arg1 rec a = do
-  fn <- asks rec
+  fn <- asksFixture rec
   fn a
 
 -- | Like 'arg1', but for functions of arity 2.
 arg2 :: Monad m => (fixture (TestFixtureT fixture log state m) -> a -> b -> TestFixtureT fixture log state m c) -> a -> b -> TestFixtureT fixture log state m c
 arg2 rec a b = do
-  fn <- asks rec
+  fn <- asksFixture rec
   fn a b
 
 -- | Like 'arg1', but for functions of arity 3.
 arg3 :: Monad m => (fixture (TestFixtureT fixture log state m) -> a -> b -> c -> TestFixtureT fixture log state m d) -> a -> b -> c -> TestFixtureT fixture log state m d
 arg3 rec a b c = do
-  fn <- asks rec
+  fn <- asksFixture rec
   fn a b c
 
 -- | Like 'arg1', but for functions of arity 4.
 arg4 :: Monad m => (fixture (TestFixtureT fixture log state m) -> a -> b -> c -> d -> TestFixtureT fixture log state m e) -> a -> b -> c -> d -> TestFixtureT fixture log state m e
 arg4 rec a b c d = do
-  fn <- asks rec
+  fn <- asksFixture rec
   fn a b c d
 
 -- | Like 'arg1', but for functions of arity 5.
 arg5 :: Monad m => (fixture (TestFixtureT fixture log state m) -> a -> b -> c -> d -> e -> TestFixtureT fixture log state m f) -> a -> b -> c -> d -> e -> TestFixtureT fixture log state m f
 arg5 rec a b c d e = do
-  fn <- asks rec
+  fn <- asksFixture rec
   fn a b c d e
 
 -- | Like 'arg1', but for functions of arity 6.
 arg6 :: Monad m => (fixture (TestFixtureT fixture log state m) -> a -> b -> c -> d -> e -> f -> TestFixtureT fixture log state m g) -> a -> b -> c -> d -> e -> f -> TestFixtureT fixture log state m g
 arg6 rec a b c d e f = do
-  fn <- asks rec
+  fn <- asksFixture rec
   fn a b c d e f
 
 -- | Like 'arg1', but for functions of arity 7.
 arg7 :: Monad m => (fixture (TestFixtureT fixture log state m) -> a -> b -> c -> d -> e -> f -> g -> TestFixtureT fixture log state m h) -> a -> b -> c -> d -> e -> f -> g -> TestFixtureT fixture log state m h
 arg7 rec a b c d e f g = do
-  fn <- asks rec
+  fn <- asksFixture rec
   fn a b c d e f g
 
 {-|
