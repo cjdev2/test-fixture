@@ -1,3 +1,7 @@
+# 0.5.0.2 (July 27, 2017)
+
+  - Added support for `template-haskell-2.12.0.0` and GHC 8.2.1.
+
 # 0.5.0.1 (June 2, 2017)
 
   - Fixed an issue where using `mkFixture` with a typeclass that used the `DefaultSignatures` extension caused an internal error ([#30](https://github.com/cjdev/test-fixture/issues/30)).

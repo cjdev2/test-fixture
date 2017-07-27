@@ -1,7 +1,7 @@
 name:
   test-fixture
 version:
-  0.5.0.1
+  0.5.0.2
 synopsis:
   Test monadic side-effects
 description:
