@@ -106,6 +106,9 @@ resolveTypeNames (UInfixT a n b) = UInfixT <$> resolveTypeNames a <*> resolveTyp
 resolveTypeNames (ParensT t) = ParensT <$> resolveTypeNames t
 resolveTypeNames t@WildCardT = return t
 #endif
+#if MIN_VERSION_template_haskell(2,12,0)
+resolveTypeNames t@UnboxedSumT{} = return t
+#endif
 
 resolveTypeName :: Name -> Q Name
 resolveTypeName (Name (OccName str) NameS) = lookupTypeName str >>= \case

@@ -44,7 +44,7 @@ library
     , haskell-src-exts
     , haskell-src-meta
     , mtl
-    , template-haskell >= 2.10 && < 2.12
+    , template-haskell >= 2.10 && < 2.13
     , th-orphans
 
 source-repository head
@@ -64,10 +64,10 @@ test-suite test-fixture-test-suite
     Test.Control.Monad.TestFixture.DefaultSignaturesSpec
     Test.Control.Monad.TestFixture.THSpec
   build-depends:
-      base >= 4.7 && < 5
+      base
     , test-fixture
     , hspec
     , hspec-discover
     , mtl
-    , template-haskell >= 2.10 && < 2.12
+    , template-haskell
     , transformers
