@@ -1,3 +1,7 @@
+# 0.5.1.0 (October 30, 2017)
+
+  - Added lifting instances for `MonadIO`, `MonadThrow`, `MonadCatch`, and `MonadMask` to `TestFixtureT`.
+
 # 0.5.0.2 (July 27, 2017)
 
   - Added support for `template-haskell-2.12.0.0` and GHC 8.2.1.
