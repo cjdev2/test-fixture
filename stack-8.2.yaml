@@ -10,6 +10,7 @@ extra-deps:
 - call-stack-0.1.0
 - cpphs-1.20.8
 - data-default-class-0.1.2.0
+- exceptions-0.8.3
 - haskell-src-exts-1.19.1
 - haskell-src-meta-0.8.0.1
 - hspec-2.4.4

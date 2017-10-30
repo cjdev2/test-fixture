@@ -222,7 +222,9 @@ import Prelude hiding (log)
 import qualified Control.Monad.Writer.Class
 import qualified Control.Monad.State.Class
 
+import Control.Monad.Catch
 import Control.Monad.Error.Class
+import Control.Monad.IO.Class
 import Control.Monad.RWS
 import Data.Functor.Identity
 
@@ -241,6 +243,10 @@ newtype TestFixtureT fixture log state m a = TestFixtureT { getRWST :: RWST (fix
     , MonadReader (fixture (TestFixtureT fixture log state m))
     , MonadWriter [log]
     , MonadState state
+    , MonadIO
+    , MonadThrow
+    , MonadCatch
+    , MonadMask
     )
 
 instance MonadTrans (TestFixtureT fixture log state) where
