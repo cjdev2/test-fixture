@@ -252,7 +252,7 @@ newtype TestFixtureT fixture log state m a = TestFixtureT { getRWST :: RWST (fix
 instance MonadTrans (TestFixtureT fixture log state) where
   lift = TestFixtureT . lift
 
-instance MonadError e m => MonadError e (TestFixtureT fixture log state m) where
+instance {-# OVERLAPPABLE #-} MonadError e m => MonadError e (TestFixtureT fixture log state m) where
   throwError = lift . throwError
   catchError m h = TestFixtureT (getRWST m `catchError` \e -> getRWST (h e))
 
