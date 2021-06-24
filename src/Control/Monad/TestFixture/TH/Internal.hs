@@ -12,7 +12,7 @@ import qualified Control.Monad.Fail as Fail
 #endif
 import qualified Control.Monad.Reader as Reader
 
-import Prelude hiding (log)
+import Prelude hiding (log, MonadFail)
 import Control.Monad (join, replicateM, when, zipWithM)
 import Control.Monad.TestFixture (TestFixture, TestFixtureT, unimplemented)
 import Data.Char (isPunctuation, isSymbol)
